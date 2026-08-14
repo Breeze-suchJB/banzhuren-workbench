@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#2B7FFF">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="班主任工作台">
+<title>郑老师的工作台</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+<div class="app" id="appRoot">
+  <div class="sidebar-mask" id="sidebarMask"></div>
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-badge">🏫</div>
+      <div>
+        <div class="logo-name">班主任智能工作台</div>
+        <div class="logo-sub">一站式班级管理</div>
+      </div>
+    </div>
+    <nav class="sidebar-nav" id="sidebarNav"></nav>
+  </aside>
+  <div class="main">
+    <header class="topbar">
+      <button class="menu-btn" id="menuBtn" type="button" data-action="toggleSidebar" title="菜单">☰</button>
+      <div class="brand" id="brandTitle">🏫 郑老师的工作台</div>
+      <div class="topbar-right" id="topbarRight">
+        <span class="top-date" id="topDate"></span>
+        <span class="top-clock" id="topClock">--:--:--</span>
+        <div class="class-select-wrap" id="classSelectWrap">
+          <span>📌</span>
+          <select id="classSelect" title="切换当前班级"></select>
+        </div>
+        <button class="avatar-btn" id="avatarBtn" type="button" title="点击更换头像" data-action="changeAvatar"></button>
+      </div>
+    </header>
+    <main class="content" id="content"></main>
+  </div>
+</div>
+
+<div class="modal-mask" id="modalMask">
+  <div class="modal" id="modalBox"></div>
+</div>
+
+<div class="drawer-mask" id="drawerMask"></div>
+<aside class="drawer" id="drawerBox">
+  <div class="drawer-head">
+    <div class="dh-title" id="drawerTitle"></div>
+    <button class="modal-x" type="button" data-action="closeDrawer">✕</button>
+  </div>
+  <div class="drawer-body" id="drawerBody"></div>
+  <div class="drawer-foot" id="drawerFoot" style="display:none"></div>
+</aside>
+
+<div class="toast-wrap" id="toastWrap"></div>
+
+<input type="file" id="avatarFile" accept="image/*" style="display:none">
+<input type="file" id="importJson" accept="application/json,.json" style="display:none">
+<input type="file" id="importCsv" accept=".csv,text/csv" style="display:none">
+
+
+<script src="app.js"></script>
+<script src="app2.js"></script>
+</body>
+</html>
