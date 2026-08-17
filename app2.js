@@ -1895,6 +1895,11 @@ const ACTIONS = {
   },
   enterScore: function (el) { enterScoreModal(el.dataset.id); },
   saveScores: function (el) { saveScores(el.dataset.id); },
+  viewScores: function (el) { viewScoresModal(el.dataset.id); },
+  exportExamCsv: function (el) { exportExamCsv(el.dataset.id); },
+  subjectSettings: function () { subjectSettingsModal(); },
+  saveSubjects: function () { saveSubjects(); },
+  subjectPreset: function (el) { fillSubjectPreset(el.dataset.type); },
   gradeTab: function (el) { state.gradeTab = el.dataset.tab; render(); },
   doCompare: function () {
     state.cmpA = document.getElementById('cmpA') ? document.getElementById('cmpA').value : '';

@@ -498,3 +498,5 @@ table.tbl{width:100%;border-collapse:collapse;font-size:13px;min-width:560px}
 .sortable{cursor:pointer;user-select:none;white-space:nowrap}
 .sortable.on{color:var(--primary)}
 .full-score-row .field label{font-size:12px;color:var(--text3)}
+
+.num.muted{color:var(--text3)}
