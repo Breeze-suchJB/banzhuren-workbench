@@ -1412,7 +1412,7 @@ const SyncEngine = {
   },
   cardHtml: function () {
     const s = this.settings();
-    const demoNotice = (DB.data.settings && DB.data.settings.demoMode) ? '<div style="font-size:12.5px;color:var(--warn);margin-bottom:8px">⚠️ 当前为演示数据模式：不会自动上传云端，避免覆盖真实数据。若你确认要把当前数据（演示/真实）上传到云端，请点下方按钮。</div><div style="margin-bottom:10px"><button class="btn small primary" data-action="exitDemoAndPush">📤 退出演示模式并上传到云端</button></div>' : '';
+    const demoNotice = (DB.data.settings && DB.data.settings.demoMode) ? '<div style="font-size:12.5px;color:var(--warn);margin-bottom:8px">⚠️ 当前为演示数据模式：不会自动上传云端，避免覆盖真实数据。如需上传，点下方“📤 立即上传到云端”即可。</div>' : '';
     const isLC = s.provider === 'leancloud';
     const isSB = s.provider === 'supabase';
     const isWD = s.provider === 'webdav';
@@ -1447,6 +1447,7 @@ const SyncEngine = {
       '<div class="form-grid"><div class="field"><label>同步方式</label><select data-field="syncProvider">' + providerOpts + '</select></div>' + body + '</div>' +
       '<div class="btn-row" style="margin-top:12px">' +
       '<button class="btn primary" data-action="saveSync">保存并立即同步</button>' +
+      '<button class="btn primary" data-action="pushNow">📤 立即上传到云端</button>' +
       '<button class="btn outline" data-action="syncPull">立即拉取</button>' +
       '<button class="btn danger" data-action="syncDisconnect">断开云同步</button>' +
       '<button class="btn danger-solid" data-action="clearCloudData">🗑 清除云端数据</button>' +
@@ -1950,15 +1951,16 @@ const ACTIONS = {
   addExamSubjectInEdit: function (el) { addExamSubjectInEdit(el.dataset.id); },
   removeExamSubjectInEdit: function (el) { removeExamSubjectInEdit(parseInt(el.dataset.idx, 10)); },
   examSubjectEditDone: function () { closeModal(); render(); },
-  exitDemoAndPush: function () {
-    if (!SyncEngine.enabled()) { toast('请先填写并保存云同步配置', 'err'); return; }
-    DB.data.settings.demoMode = false;
+  pushNow: function () {
+    if (typeof SyncEngine === 'undefined' || !SyncEngine.enabled()) { toast('请先填写并保存云同步配置', 'err'); return; }
+    if (DB.data.settings.demoMode) { DB.data.settings.demoMode = false; toast('已退出演示模式，正在上传…'); }
+    else { toast('正在上传到云端…'); }
     SyncEngine._dirty = true;
     SyncEngine._driverCache = null;
     SyncEngine._saveMeta();
-    toast('已退出演示模式，正在上传…');
     SyncEngine.push();
   },
+  exitDemoAndPush: function () { ACTIONS.pushNow(); },
   clearCloudData: function () {
     confirmBox({ title: '清除云端数据', message: '将删除云端备份的同步数据（本地数据保留）。若本地仍是演示数据，建议先“清除现有数据”再重新同步，避免把演示数据再传上去。', danger: true, okText: '清除云端', onOk: function () { SyncEngine.clearCloud(); } });
   },
