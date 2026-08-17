@@ -962,8 +962,7 @@ function renderDataMgr() {
   const danger = '<div class="card"><div class="card-title">💾 数据备份与恢复</div><div class="btn-row">' +
     '<button class="btn primary" data-action="exportJson">导出 JSON 完整备份</button>' +
     '<button class="btn outline" data-action="importJson">导入 JSON 恢复</button>' +
-    '<button class="btn outline" data-action="exportStudents">导出学生 CSV</button>' +
-    '<button class="btn outline" data-action="exportRangeOpen">按时间段导出</button></div></div>' +
+    '<button class="btn outline" data-action="exportStudents">导出学生 CSV</button></div></div>' +
     '<div class="risk-zone"><div class="rz-title">⚠️ 危险操作区</div><div style="font-size:12.5px;color:var(--text2);margin-bottom:10px">以下操作会清空或重置本地数据，请谨慎操作。</div>' +
     '<div class="btn-row"><button class="btn danger" data-action="clearDemo">清空演示数据</button><button class="btn danger-solid" data-action="resetDemo">重新生成演示数据</button></div></div>';
   const syncCard = (typeof syncCardHtml === 'function') ? syncCardHtml() : '';
@@ -1036,64 +1035,6 @@ function saveProfilePrefs() {
 }
 
 
-
-/* ---------- 按时间段导出 ---------- */
-function rangeRecords(start, end) {
-  const d = DB.data;
-  const S = start <= end ? start : end, E = start <= end ? end : start;
-  const inR = function (dt) { return !!dt && dt >= S && dt <= E; };
-  const any = function (r) { return [r.date, r.start, r.end, r.assignDate, r.dueDate, r.createdAt].some(inR); };
-  const out = { attendance: [], leaves: [], points: [], violations: [], contacts: [], logs: [], talks: [], activities: [], departures: [], notices: [], homeworks: [] };
-  ['attendance', 'leaves', 'points', 'violations', 'contacts', 'logs', 'talks', 'activities', 'departures', 'notices', 'homeworks'].forEach(function (k) {
-    (d[k] || []).forEach(function (r) { if (any(r)) out[k].push(r); });
-  });
-  return { S: S, E: E, data: out };
-}
-function exportRangeOpen() {
-  openModal(
-    '<div class="form-grid">' +
-    field('rStart', '开始日期', dateAdd(todayStr(), -30), 'date') +
-    field('rEnd', '结束日期', todayStr(), 'date') +
-    '<div style="font-size:12.5px;color:var(--text3)">按时间段导出考勤、请假、积分、违纪、家校沟通、工作日志、谈心谈话、活动、离校登记、通知、作业等记录。</div>' +
-    '</div>',
-    { title: '按时间段导出' }
-  );
-  const foot = modalFootHtml('<button class="btn outline" data-action="exportRangeCsv">导出 CSV 明细</button><button class="btn primary" data-action="exportRangeJson">导出 JSON 备份</button>');
-  document.getElementById('modalBox').insertAdjacentHTML('beforeend', foot);
-}
-function exportRangeCsv() {
-  const v = readFields();
-  if (!v.rStart || !v.rEnd) { toast('请选择起止日期', 'err'); return; }
-  const rr = rangeRecords(v.rStart, v.rEnd);
-  const d = rr.data, gs = function (id) { const st = getStudent(id); return st ? st.name : '未知'; };
-  const rows = [['类别', '日期', '学生', '内容/说明', '数值', '状态']];
-  const push = function (cat, dt, stu, content, val, st) { rows.push([cat, dt, stu, content, val, st]); };
-  d.attendance.forEach(r => push('考勤', r.date, gs(r.studentId), r.status, '', ''));
-  d.leaves.forEach(r => push('请假', r.start + '~' + r.end, gs(r.studentId), r.reason, r.days + '天', r.status));
-  d.points.forEach(r => push('积分', r.date, gs(r.studentId), r.reason, r.value, r.type));
-  d.violations.forEach(r => push('违纪', r.date, gs(r.studentId), r.desc, '', r.handle));
-  d.contacts.forEach(r => push('家校沟通', r.date, gs(r.studentId), r.content, '', r.status));
-  d.logs.forEach(r => push('工作日志', r.date, '', r.content, r.hours + '小时', ''));
-  d.talks.forEach(r => push('谈心谈话', r.date, gs(r.studentId), r.content, '', ''));
-  d.activities.forEach(r => push('活动', r.date, '', r.name + (r.desc || ''), '', ''));
-  d.departures.forEach(r => push('离校登记', r.date, gs(r.studentId), (r.leaveTime || '') + '~' + (r.backTime || ''), '', ''));
-  d.notices.forEach(r => push('通知', r.date, '', r.title, '', ''));
-  d.homeworks.forEach(r => push('作业', (r.assignDate || '') + '~' + (r.dueDate || ''), '', r.title, '', r.subject));
-  downloadFile('工作台数据_' + rr.S + '_' + rr.E + '.csv', '﻿' + toCSV(rows), 'text/csv;charset=utf-8');
-  closeModal();
-  toast('已导出 ' + (rows.length - 1) + ' 条记录');
-}
-function exportRangeJson() {
-  const v = readFields();
-  if (!v.rStart || !v.rEnd) { toast('请选择起止日期', 'err'); return; }
-  const rr = rangeRecords(v.rStart, v.rEnd);
-  const summary = {};
-  Object.keys(rr.data).forEach(function (k) { summary[k] = rr.data[k].length; });
-  const payload = { type: '班主任工作台·按时间段导出', range: rr.S + '~' + rr.E, exportedAt: new Date().toISOString(), summary: summary, data: rr.data };
-  downloadFile('工作台数据_' + rr.S + '_' + rr.E + '.json', JSON.stringify(payload, null, 2), 'application/json');
-  closeModal();
-  toast('已导出 JSON 备份');
-}
 /* ================= 云同步（多设备实时同步） ================= */
 /* 驱动：LeanCloud 国际版（免备案、国内可直连）/ 自建 WebDAV（需开启 CORS）
    策略：整库上传，版本号 rev 递增，新版本覆盖旧版本（最后保存者胜）；
@@ -1856,9 +1797,6 @@ const ACTIONS = {
     if (ss.key === k) ss.dir = -ss.dir; else { ss.key = k; ss.dir = 1; }
     render();
   },
-  exportRangeOpen: function () { exportRangeOpen(); },
-  exportRangeCsv: function () { exportRangeCsv(); },
-  exportRangeJson: function () { exportRangeJson(); },
   delStudent: function (el) {
     const st = getStudent(el.dataset.id);
     confirmBox({ title: '删除学生', message: '确定删除学生「' + (st ? st.name : '') + '」吗？相关成绩、考勤等记录将一并删除。', danger: true, okText: '删除', onOk: function () {
@@ -1906,6 +1844,19 @@ const ACTIONS = {
   },
   saveDashSettings: function () { saveDashSettings(); },
   jumpDash: function () { state.module = 'dashboard'; render(); },
+  dashEditOpen: function () { dashEditOpen(); },
+  dashEditSave: function () { dashEditSave(); },
+  pickSuggestion: function (el) {
+    const inputId = el.dataset.input;
+    const sid = el.dataset.id;
+    const st = getStudent(sid);
+    if (!st) return;
+    const inp = document.getElementById(inputId);
+    closeSuggest();
+    if (inputId === 'studentSearch') { if (inp) inp.value = st.name; state.studentQuery = st.name; render(); }
+    else if (inputId === 'personalSearch') { const sel = document.getElementById('personalStu'); if (sel) sel.value = sid; state.personalStuId = sid; render(); }
+    else if (inputId === 'classStuSearch') { if (inp) inp.value = st.name; state.classStuQuery = st.name; render(); }
+  },
 
   /* 成绩 */
   addExam: function () { examFormModal(); },
@@ -2435,7 +2386,7 @@ function exportStudentsCsv(rStart, rEnd) {
   const E = rStart && rEnd ? (rStart <= rEnd ? rEnd : rStart) : '';
   const inR = function (dt) { return !!dt && (!S || (dt >= S && dt <= E)); };
   const head = ['学号', '姓名', '性别', '手机号', '住校', '职务', '家庭情况', '家长姓名', '监护人', '入学日期', '小组编号', '综合成绩', '排名', '积分', '预警标签', '标签'];
-  if (S) head.push('期内出勤', '期内迟到', '期内缺勤', '期内请假', '期内积分', '期内违纪', '期内沟通');
+  if (S) { head.push('期内出勤', '期内迟到', '期内缺勤', '期内请假', '期内积分', '期内违纪', '期内沟通', '时间段'); }
   const rows = [head];
   currentStudents().forEach(s => {
     const base = [s.no, s.name, s.gender, s.phone, s.boarding ? '是' : '否', s.position || '', s.family || '', s.parentName || '', s.guardian || '', s.admitDate || '', s.groupId || '', s.totalScore || '', s.classRank || '', s.score || 0, (s.warningTags || []).join('/'), (s.tags || []).join('/')];
@@ -2449,7 +2400,8 @@ function exportStudentsCsv(rStart, rEnd) {
         att.filter(a => a.status === '请假').length,
         pts.reduce((a, b) => a + (b.value || 0), 0),
         d.violations.filter(v => v.studentId === s.id && inR(v.date)).length,
-        d.contacts.filter(c => c.studentId === s.id && inR(c.date)).length
+        d.contacts.filter(c => c.studentId === s.id && inR(c.date)).length,
+        S + ' ~ ' + E
       ]));
     } else rows.push(base);
   });
@@ -2576,34 +2528,104 @@ function filterPersonalOptions(q) {
   else if (!visible.length && sel.options.length) { sel.value = ''; }
 }
 /* ================= 事件绑定 ================= */
+function studentSuggestHtml(q) {
+  q = (q || '').trim().toLowerCase();
+  if (!q) return '';
+  const p = function (ch) { return (typeof PINYIN_INITIALS !== 'undefined' && PINYIN_INITIALS[ch]) || ''; };
+  const hits = currentStudents().filter(function (s) {
+    const name = s.name || '';
+    const initial = name.split('').map(function (c) { return p(c); }).join('');
+    return name.toLowerCase().indexOf(q) >= 0 || String(s.no).indexOf(q) >= 0 || initial.indexOf(q) >= 0;
+  }).slice(0, 8);
+  if (!hits.length) return '';
+  return hits.map(function (s) {
+    return '<div class="sug-item" data-action="pickSuggestion" data-input="' + window.__sugInput + '" data-id="' + s.id + '">' +
+      '<span class="sug-name">' + esc(s.name) + '</span><span class="sug-no">' + esc(s.no) + ' · ' + esc(s.gender) + '</span></div>';
+  }).join('');
+}
+function showSuggest(inputId, q) {
+  closeSuggest();
+  const inp = document.getElementById(inputId);
+  if (!inp || !q) return;
+  window.__sugInput = inputId;
+  const html = studentSuggestHtml(q);
+  if (!html) return;
+  const div = document.createElement('div');
+  div.id = 'stuSuggest';
+  div.innerHTML = html;
+  document.body.appendChild(div);
+  const r = inp.getBoundingClientRect();
+  div.style.top = (r.bottom + 4) + 'px';
+  div.style.left = r.left + 'px';
+  div.style.width = Math.max(r.width, 180) + 'px';
+}
+function closeSuggest() {
+  const el = document.getElementById('stuSuggest');
+  if (el) el.remove();
+}
 document.addEventListener('input', function (e) {
   const t = e.target;
-  if (t && t.id === 'personalSearch') filterPersonalOptions(t.value);
+  if (!t) return;
+  if (t.id === 'personalSearch') filterPersonalOptions(t.value);
+  if (t.id === 'studentSearch' || t.id === 'personalSearch' || t.id === 'classStuSearch') showSuggest(t.id, t.value);
 });
 
 document.addEventListener('dragstart', function (e) {
-  const row = e.target.closest ? e.target.closest('.dash-block-row') : null;
+  const row = e.target.closest ? e.target.closest('.dash-block-row, .dash-edit-card') : null;
   if (row) { e.dataTransfer.setData('text/plain', row.getAttribute('data-id')); row.classList.add('dragging'); }
 });
 document.addEventListener('dragover', function (e) {
-  const row = e.target.closest ? e.target.closest('.dash-block-row') : null;
+  const row = e.target.closest ? e.target.closest('.dash-block-row, .dash-edit-card') : null;
   if (row) { e.preventDefault(); row.classList.add('drag-over'); }
 });
 document.addEventListener('dragleave', function (e) {
-  const row = e.target.closest ? e.target.closest('.dash-block-row') : null;
+  const row = e.target.closest ? e.target.closest('.dash-block-row, .dash-edit-card') : null;
   if (row) row.classList.remove('drag-over');
 });
 document.addEventListener('drop', function (e) {
   e.preventDefault();
   const from = e.dataTransfer.getData('text/plain');
-  const row = e.target.closest ? e.target.closest('.dash-block-row') : null;
-  if (from && row) moveDashBlock(from, row.getAttribute('data-id'));
-  document.querySelectorAll('.dash-block-row').forEach(function (r) { r.classList.remove('dragging', 'drag-over'); });
+  const row = e.target.closest ? e.target.closest('.dash-block-row, .dash-edit-card') : null;
+  if (from && row) { moveDashBlock(from, row.getAttribute('data-id')); if (document.querySelector('.dash-edit-card')) dashEditOpen(); }
+  document.querySelectorAll('.dash-block-row, .dash-edit-card').forEach(function (r) { r.classList.remove('dragging', 'drag-over'); });
+});
+/* 仪表盘详情页：拖拽右下角调整大小 */
+let __dashResize = null;
+document.addEventListener('mousedown', function (e) {
+  const h = e.target.closest ? e.target.closest('.dec-resize') : null;
+  if (!h) return;
+  e.preventDefault();
+  const card = h.closest('.dash-edit-card');
+  const grid = card.closest('.dash-edit-grid');
+  const gRect = grid.getBoundingClientRect();
+  __dashResize = { id: card.getAttribute('data-id'), startX: e.clientX, startY: e.clientY, w0: card.offsetWidth / gRect.width * 100, h0: card.offsetHeight, gLeft: gRect.left, gW: gRect.width };
+});
+document.addEventListener('mousemove', function (e) {
+  if (!__dashResize) return;
+  const card = document.querySelector('.dash-edit-card[data-id="' + __dashResize.id + '"]');
+  if (!card) return;
+  let w = (e.clientX - __dashResize.gLeft) / __dashResize.gW * 100;
+  w = Math.max(20, Math.min(100, w));
+  let h = __dashResize.h0 + (e.clientY - __dashResize.startY);
+  h = Math.max(120, Math.min(700, h));
+  card.style.width = w + '%';
+  card.style.minHeight = h + 'px';
+  const lbl = card.querySelector('.dec-size');
+  if (lbl) lbl.textContent = Math.round(w) + '% × ' + Math.round(h) + 'px';
+  __dashResize.w = w; __dashResize.h = h;
+});
+document.addEventListener('mouseup', function () {
+  if (!__dashResize) return;
+  const d = DB.data;
+  const b = d.settings.dashboard.blocks.find(x => x.id === __dashResize.id);
+  if (b) { b.w = Math.round(__dashResize.w); b.h = Math.round(__dashResize.h); DB.save(); }
+  __dashResize = null;
 });
 
 document.addEventListener('click', function (e) {
   const target = e.target;
   /* 弹窗遮罩点击关闭 */
+  if (!target.closest || !target.closest('#stuSuggest')) closeSuggest();
   if (target.id === 'modalMask') { closeModal(); return; }
   if (target.id === 'drawerMask') { closeDrawer(); return; }
   if (target.id === 'sidebarMask') { document.getElementById('sidebar').classList.remove('open'); return; }
@@ -2621,7 +2643,13 @@ document.addEventListener('click', function (e) {
 });
 document.addEventListener('change', function (e) {
   const t = e.target;
-  if (t.id === 'classSelect') {
+  if (t.id === 'personalStu') {
+    state.personalStuId = t.value;
+    render();
+  } else if (t.id === 'classExamSel') {
+    state.classExamId = t.value;
+    render();
+  } else if (t.id === 'classSelect') {
     DB.data.settings.currentClassId = t.value;
     DB.save(); closeModal(); render();
   } else if (t.id === 'studentSearch') {
@@ -2635,7 +2663,10 @@ document.addEventListener('change', function (e) {
     if (b) { b.enabled = t.checked; DB.save(); render(); }
   } else if (t.classList && t.classList.contains('dash-width')) {
     const b = DB.data.settings.dashboard.blocks.find(x => x.id === t.dataset.id);
-    if (b) { b.w = t.value; DB.save(); render(); }
+    if (b) { b.w = parseInt(t.value, 10) || 100; DB.save(); render(); }
+  } else if (t.classList && t.classList.contains('dash-height')) {
+    const b = DB.data.settings.dashboard.blocks.find(x => x.id === t.dataset.id);
+    if (b) { b.h = parseInt(t.value, 10) || 0; DB.save(); render(); }
   } else if (t.id === 'classStuSearch') {
     state.classStuQuery = t.value;
     const content = document.getElementById('content');

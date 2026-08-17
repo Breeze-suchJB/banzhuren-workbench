@@ -1,5 +1,5 @@
 /* 构建版本 */
-const APP_VERSION = '20260817-130229';
+const APP_VERSION = '20260817-134555';
 /* ================= 数据层 ================= */
 const STORAGE_KEY = 'banzhuren_workbench_v1';
 const DB_VERSION = 1;
@@ -1043,6 +1043,10 @@ function statCard(color, title, num, sub, unit, action, target) {
 function emptyHtml(text, ico) {
   return '<div class="empty"><div class="e-ico">' + (ico || '📭') + '</div>' + esc(text || '暂无数据') + '</div>';
 }
+/* 常见姓氏拼音首字母（用于搜索联想） */
+const PINYIN_INITIALS = {
+  '王':'w','李':'l','张':'z','刘':'l','陈':'c','杨':'y','赵':'z','黄':'h','周':'z','吴':'w','徐':'x','孙':'s','马':'m','朱':'z','胡':'h','郭':'g','何':'h','林':'l','罗':'l','高':'g','郑':'z','梁':'l','谢':'x','宋':'s','唐':'t','许':'x','韩':'h','冯':'f','邓':'d','曹':'c','彭':'p','曾':'z','肖':'x','田':'t','董':'d','袁':'y','潘':'p','于':'y','蒋':'j','蔡':'c','余':'y','杜':'d','叶':'y','程':'c','苏':'s','魏':'w','吕':'l','丁':'d','任':'r','沈':'s','姚':'y','卢':'l','姜':'j','崔':'c','钟':'z','谭':'t','陆':'l','汪':'w','范':'f','金':'j','石':'s','廖':'l','贾':'j','夏':'x','韦':'w','傅':'f','方':'f','白':'b','邹':'z','孟':'m','熊':'x','秦':'q','邱':'q','江':'j','尹':'y','薛':'x','闫':'y','段':'d','雷':'l','侯':'h','龙':'l','史':'s','陶':'t','黎':'l','贺':'h','顾':'g','毛':'m','郝':'h','龚':'g','邵':'s','万':'w','钱':'q','严':'y','覃':'q','武':'w','戴':'d','莫':'m','孔':'k','向':'x','汤':'t'
+};
 /* 导航数据 */
 const NAV_GROUPS = [
   { name: '总览', items: [
@@ -1224,7 +1228,10 @@ function renderDashboard() {
   const dashHtml = dashBlocks.filter(function (b) { return b.enabled !== false; }).map(function (b) {
     const card = DASH_BLOCK_CARDS[b.id];
     if (!card) return '';
-    return '<div class="dash-card ' + (b.w === 'half' ? 'half' : '') + '"><div class="card"><div class="card-title">' + card[0] + card[1] + '</div>' + (DASH_BLOCK_HTML[b.id] || '') + '</div></div>';
+    const wNum = (typeof b.w === 'number') ? b.w : (b.w === 'half' ? 50 : 100);
+    const hPx = (typeof b.h === 'number' && b.h > 0) ? b.h : 0;
+    const st = (wNum >= 100 ? '' : 'flex:0 1 calc(' + wNum + '% - 16px);min-width:260px;') + (hPx ? 'min-height:' + hPx + 'px;' : '');
+    return '<div class="dash-card" style="' + st + '"><div class="card"><div class="card-title">' + card[0] + card[1] + '</div>' + (DASH_BLOCK_HTML[b.id] || '') + '</div></div>';
   }).join('');
   return '<div class="greet-row"><div class="greet">' + esc(s.teacherName) + '好，今天也要努力哟 💪<small>' + esc(today) + ' · ' + esc(cc ? cc.name : '') + '</small></div>' +
     (retire != null ? '<span class="badge amber" title="距离退休">🕰️ 距离退休还有 ' + retire + ' 天</span>' : '') + '</div>' +
@@ -1444,7 +1451,9 @@ function renderSettings() {
       '<span class="db-drag" title="拖动排序">⠿</span>' +
       '<span class="db-name">' + (names[b.id] || b.id) + '</span>' +
       '<label class="db-toggle"><input type="checkbox" class="dash-enable" data-id="' + b.id + '"' + (b.enabled !== false ? ' checked' : '') + '> 显示</label>' +
-      '<select class="dash-width" data-id="' + b.id + '"><option value="full"' + (b.w !== 'half' ? ' selected' : '') + '>全宽</option><option value="half"' + (b.w === 'half' ? ' selected' : '') + '>半宽</option></select>' +
+      '<select class="dash-width" data-id="' + b.id + '">' + [25, 33, 50, 66, 75, 100].map(function (v) { return '<option value="' + v + '"' + (((typeof b.w === 'number' ? b.w : (b.w === 'half' ? 50 : 100)) === v) ? ' selected' : '') + '>' + v + '%</option>'; }).join('') + '</select>' +
+      '<select class="dash-height" data-id="' + b.id + '">' + [['0', '自动'], ['180', '紧凑'], ['260', '标准'], ['360', '较高']].map(function (o) { return '<option value="' + o[0] + '"' + (((typeof b.h === 'number' && b.h > 0) ? b.h : 0) === parseInt(o[0], 10) ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select>' +
+      '<button class="btn small primary" data-action="dashEditOpen">调整大小</button>' +
       '<button class="btn btn-ico" data-action="dashBlockMove" data-id="' + b.id + '" data-dir="up" title="上移">↑</button>' +
       '<button class="btn btn-ico" data-action="dashBlockMove" data-id="' + b.id + '" data-dir="down" title="下移">↓</button>' +
       '</div>';
@@ -1462,7 +1471,8 @@ function saveDashSettings() {
     const id = row.getAttribute('data-id');
     const en = row.querySelector('.dash-enable');
     const w = row.querySelector('.dash-width');
-    blocks.push({ id: id, enabled: en ? en.checked : true, w: w ? w.value : 'full' });
+    const hSel = row.querySelector('.dash-height');
+    blocks.push({ id: id, enabled: en ? en.checked : true, w: w ? (parseInt(w.value, 10) || 100) : 100, h: hSel ? (parseInt(hSel.value, 10) || 0) : 0 });
   });
   d.settings.dashboard = { blocks: blocks };
   DB.save();
@@ -1478,6 +1488,32 @@ function moveDashBlock(fromId, toId) {
   const it = arr.splice(i, 1)[0];
   arr.splice(j, 0, it);
   DB.save();
+  render();
+}
+
+function dashEditOpen() {
+  const d = DB.data;
+  const blocks = (d.settings.dashboard.blocks || []).filter(function (b) { return b.enabled !== false; });
+  const names = { stats: '📊 数据总览', alerts: '🚨 红线预警', quick: '⚡ 快捷操作', todo: '📌 今日待办', course: '📖 今日课程', points: '🏆 量化积分前五名', countdown: '⏳ 重要事项倒计时', notices: '📢 最新通知' };
+  const cards = blocks.map(function (b) {
+    const w = (typeof b.w === 'number') ? b.w : (b.w === 'half' ? 50 : 100);
+    const h = (typeof b.h === 'number' && b.h > 0) ? b.h : 260;
+    return '<div class="dash-edit-card" draggable="true" data-id="' + b.id + '" style="width:' + w + '%;min-height:' + h + 'px">' +
+      '<div class="dec-head"><span class="db-drag">⠿</span><span class="dec-name">' + (names[b.id] || b.id) + '</span><span class="dec-size">' + w + '% × ' + h + 'px</span></div>' +
+      '<div class="dec-body">拖动 ⠿ 排序 · 拖右下角 ⇲ 调整大小</div>' +
+      '<div class="dec-resize" title="拖动调整大小">⇲</div></div>';
+  }).join('');
+  openModal(
+    '<div style="font-size:13px;color:var(--text2);margin-bottom:10px">拖动卡片调整顺序与大小（实时保存），完成后点“保存并返回”。</div>' +
+    '<div class="dash-edit-grid">' + cards + '</div>',
+    { title: '⚙️ 仪表盘详情页 · 自定义布局', wide: true }
+  );
+  const foot = modalFootHtml('<button class="btn primary" data-action="dashEditSave">💾 保存并返回</button><button class="btn outline" data-action="closeModal">取消</button>');
+  document.getElementById('modalBox').insertAdjacentHTML('beforeend', foot);
+}
+function dashEditSave() {
+  closeModal();
+  toast('仪表盘布局已保存');
   render();
 }
 /* ================= 模块：成绩管理 ================= */
