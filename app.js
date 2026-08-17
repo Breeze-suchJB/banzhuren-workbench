@@ -1,5 +1,5 @@
 /* 构建版本 */
-const APP_VERSION = '20260817-150614';
+const APP_VERSION = '20260817-152837';
 /* ================= 数据层 ================= */
 const STORAGE_KEY = 'banzhuren_workbench_v1';
 const DB_VERSION = 1;
@@ -553,6 +553,17 @@ const DB = {
   },
   resetDemo() {
     this.data = demoData();
+    this.save();
+  },
+  clearBusinessData() {
+    const d = this.data;
+    ['students', 'exams', 'scores', 'attendance', 'leaves', 'points', 'violations', 'homeworks',
+     'contacts', 'notices', 'aids', 'todos', 'logs', 'talks', 'meetings', 'resources', 'recites',
+     'countdowns', 'honorsClass', 'honorsTeacher', 'activities', 'departures', 'customHolidays', 'career']
+      .forEach(k => { d[k] = []; });
+    d.fiveEval = {}; d.subjectChoices = {}; d.safety = { physical: [], retention: [], safetyLedger: [], mental: [] }; d.comments = {}; d.lessons = [];
+    if (d.duties) { d.duties.days = []; d.duties.roomDuty = { days: [] }; }
+    if (d.seat && d.seat.layout) d.seat.layout.forEach(x => { x.studentId = ''; });
     this.save();
   },
   clearAll() {
@@ -1550,6 +1561,15 @@ function dashPreviewHtml() {
 /* ================= 模块：成绩管理 ================= */
 let scoreDraft = {};  /* 录入成绩草稿（切换科目增删时保留） */
 let lastDeletedSubject = null;  /* 最近删除的科目（可回退） */
+let gradeSubjDraft = [];  /* 成绩科目显示顺序草稿 */
+function orderedSubjects(exam) {
+  const order = (DB.data.settings.gradeSubjects || []).slice();
+  const list = (exam && exam.subjects ? exam.subjects.slice() : []);
+  if (!order.length) return list;
+  const inOrder = order.map(function (n) { return list.find(function (s) { return s.name === n; }); }).filter(Boolean);
+  const rest = list.filter(function (s) { return order.indexOf(s.name) < 0; });
+  return inOrder.concat(rest);
+}
 const MAIN_SUBJECTS = ['语文', '数学', '英语'];
 const COMBO_CHAR = { '物': '物理', '化': '化学', '生': '生物', '政': '政治', '史': '历史', '地': '地理' };
 function renderGrades() {
@@ -1622,10 +1642,11 @@ function enterScoreModal(examId) {
   const stu = currentStudents().slice().sort((a, b) => (a.classRank || 999) - (b.classRank || 999));
   const existing = {};
   d.scores.filter(s => s.examId === examId).forEach(s => { existing[s.studentId] = s; });
-  const head = '<tr><th style="min-width:130px">学生</th>' + exam.subjects.map(s => '<th data-subject="' + esc(s.name) + '">' + esc(s.name) + '<br><small class="full-label" style="font-weight:400">' + s.full + '分</small></th>').join('') + '<th>总分</th><th>排名</th></tr>';
+  const ordered = orderedSubjects(exam);
+  const head = '<tr><th style="min-width:130px">学生</th>' + ordered.map(s => '<th data-subject="' + esc(s.name) + '">' + esc(s.name) + '<br><small class="full-label" style="font-weight:400">' + s.full + '分</small></th>').join('') + '<th>总分</th><th>排名</th></tr>';
   const rows = stu.map(s => {
     const sc = existing[s.studentId];
-    const inputs = exam.subjects.map(sub => {
+    const inputs = ordered.map(sub => {
       const draftVal = (scoreDraft[s.id] && scoreDraft[s.id][sub.name] != null) ? scoreDraft[s.id][sub.name] : null;
       const val = draftVal != null ? draftVal : (sc ? ((sc.subjects.find(x => x.name === sub.name) || {}).score || '') : '');
       return '<td><input class="score-input' + (val !== '' ? ' done' : '') + '" type="number" min="0" max="' + sub.full + '" data-subject="' + esc(sub.name) + '" value="' + esc(val) + '" placeholder="—"></td>';
@@ -1635,11 +1656,12 @@ function enterScoreModal(examId) {
     return '<tr data-sid="' + s.id + '"><td class="stu-nm">' + esc(s.name) + ' <small style="color:var(--text3);font-weight:400">' + esc(s.no) + '</small></td>' + inputs + '<td class="row-total">' + total + '</td><td class="row-rank">' + rank + '</td></tr>';
   }).join('');
   const fullRow = '<div class="full-score-row" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;align-items:flex-end">' +
-    exam.subjects.map(sub => '<div class="field" style="margin:0"><label>' + esc(sub.name) + ' 满分</label><input type="number" class="full-score-input" data-subject="' + esc(sub.name) + '" value="' + sub.full + '" min="1" max="500" style="width:84px"></div>').join('') +
+    ordered.map(sub => '<div class="field" style="margin:0"><label>' + esc(sub.name) + ' 满分</label><input type="number" class="full-score-input" data-subject="' + esc(sub.name) + '" value="' + sub.full + '" min="1" max="500" style="width:84px"></div>').join('') +
     '<div class="field" style="margin:0"><label>科目操作</label><div style="display:flex;gap:6px;align-items:center"><input id="newSubjName" placeholder="科目名" style="width:90px;border:1px solid var(--border);border-radius:8px;padding:6px 8px"><input id="newSubjFull" type="number" value="100" min="1" max="500" style="width:70px;border:1px solid var(--border);border-radius:8px;padding:6px 8px"><button type="button" class="btn small primary" data-action="addExamSubject" data-id="' + examId + '">＋ 添加</button><button type="button" class="btn small danger" data-action="openDeleteSubjectModal" data-id="' + examId + '">－ 删除</button>' + (lastDeletedSubject && lastDeletedSubject.examId === examId ? '<button type="button" class="btn small outline" data-action="undoDeleteSubject">↩ 回退</button>' : '') + '</div></div>' +
     '<span class="hint" style="font-size:12px;color:var(--text3);padding-bottom:6px">修改满分失焦即生效；可增删科目（如初中数学120、高中数学150）</span></div>';
   openModal(
     '<div style="font-size:13px;color:var(--text2);margin-bottom:10px">' + esc(exam.name) + ' · ' + esc(exam.date) + ' · 填写各科成绩后保存，自动计算总分与班级排名</div>' +
+    '<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap"><button type="button" class="btn small outline" data-action="scoreCsvPick">📥 导入 CSV</button><button type="button" class="btn small outline" data-action="scoreCsvTemplate" data-id="' + examId + '">📄 空白模板</button><span class="hint" style="font-size:12px;color:var(--text3)">CSV 第一行：学号,姓名,科目…,总分</span><input type="file" id="scoreCsvFile" accept=".csv,text/csv" style="display:none"></div>' +
     fullRow + '<div class="table-wrap" style="max-height:62vh;overflow:auto"><table class="enter-table"><thead>' + head + '</thead><tbody>' + rows + '</tbody></table></div>',
     { title: '成绩录入 · ' + exam.name, wide: true }
   );
@@ -1674,6 +1696,8 @@ function enterScoreModal(examId) {
       toast('已修改' + nm + '满分为 ' + v + ' 分');
     });
   });
+  const csvIn = document.getElementById('scoreCsvFile');
+  if (csvIn) csvIn.addEventListener('change', function () { parseScoreCsv(examId, csvIn); csvIn.value = ''; });
 }
 function saveScores(examId) {
   const d = DB.data;
@@ -1748,6 +1772,7 @@ function gradePersonalHtml() {
   }).filter(p => p.value > 0), { shortLabel: true }) : emptyHtml('请选择学生');
   const allSubj = [];
   exams.forEach(function (e) { (e.subjects || []).forEach(function (s) { if (allSubj.indexOf(s.name) < 0) allSubj.push(s.name); }); });
+  (function () { const order = d.settings.gradeSubjects || []; allSubj.sort(function (a, b) { const ia = order.indexOf(a), ib = order.indexOf(b); return (ia < 0 ? 999 : ia) - (ib < 0 ? 999 : ib); }); })();
   const subjCells = function (sc, subjNames) {
     return subjNames.map(function (nm) {
       const x = sc && (sc.subjects || []).find(y => y.name === nm);
@@ -2012,53 +2037,80 @@ const SUBJECT_PRESETS = {
   junior: ['语文', '数学', '英语', '物理', '化学', '生物', '政治', '历史', '地理', '体育', '音乐', '美术', '信息技术'],
   senior: ['语文', '数学', '英语', '物理', '化学', '生物', '政治', '历史', '地理', '体育', '音乐', '美术', '信息技术', '通用技术']
 };
+function renderGradeSubjList() {
+  const box = document.getElementById('gradeSubjList');
+  if (!box) return;
+  box.innerHTML = gradeSubjDraft.map(function (nm, i) {
+    const color = (DB.data.settings.subjectColors || {})[nm] || SUBJECT_PALETTE[i % SUBJECT_PALETTE.length];
+    return '<div class="subj-order-row" data-idx="' + i + '">' +
+      '<span class="sor-dot" style="background:' + color + '"></span>' +
+      '<span class="sor-name">' + esc(nm) + '</span>' +
+      '<button type="button" class="btn btn-ico" data-action="moveGradeSubject" data-dir="up" data-idx="' + i + '" title="上移">↑</button>' +
+      '<button type="button" class="btn btn-ico" data-action="moveGradeSubject" data-dir="down" data-idx="' + i + '" title="下移">↓</button>' +
+      '<button type="button" class="btn btn-ico danger" data-action="removeGradeSubject" data-idx="' + i + '" title="删除">×</button>' +
+      '</div>';
+  }).join('') || '<span class="hint">暂无科目</span>';
+}
 function subjectSettingsModal() {
   const d = DB.data;
-  const list = (d.settings.gradeSubjects && d.settings.gradeSubjects.length) ? d.settings.gradeSubjects : Object.keys(d.settings.subjectColors || {});
-  const lines = list.map(k => k + ',' + ((d.settings.subjectColors || {})[k] || SUBJECT_PALETTE[list.indexOf(k) % SUBJECT_PALETTE.length])).join('\n');
+  gradeSubjDraft = ((d.settings.gradeSubjects && d.settings.gradeSubjects.length) ? d.settings.gradeSubjects : Object.keys(d.settings.subjectColors || {})).slice();
   openModal(
     '<div class="form-grid">' +
-    '<div class="field full"><label>快捷预设（点击后自动填充，可再修改）</label>' +
+    '<div class="field full"><label>快捷预设（点击替换当前列表）</label>' +
     '<div class="btn-row" style="flex-wrap:wrap">' +
     '<button type="button" class="btn small primary" data-action="subjectPreset" data-type="primary">小学</button>' +
     '<button type="button" class="btn small primary" data-action="subjectPreset" data-type="junior">初中</button>' +
     '<button type="button" class="btn small primary" data-action="subjectPreset" data-type="senior">高中</button>' +
     '</div></div>' +
-    '<div class="field full"><label>科目列表（每行一条“科目,颜色”，可增删改）</label>' +
-    '<textarea data-field="subjects" rows="10" style="font-family:monospace">' + esc(lines) + '</textarea></div>' +
-    '<div style="font-size:12px;color:var(--text3)">修改后课表、成绩录入、新建考试里的科目下拉都会同步更新。</div>' +
+    '<div class="field full"><label>科目与显示顺序（↑↓ 调整顺序，× 删除）</label>' +
+    '<div id="gradeSubjList" class="subj-order-list"></div></div>' +
+    '<div class="field full"><label>新增科目</label><div style="display:flex;gap:6px"><input id="newGradeSubj" placeholder="科目名" style="flex:1;border:1px solid var(--border);border-radius:8px;padding:7px 9px"><button type="button" class="btn small primary" data-action="addGradeSubject">添加</button></div></div>' +
+    '<div style="font-size:12px;color:var(--text3)">保存后，成绩录入、个人成绩、班级成员成绩会按此顺序显示科目。</div>' +
     '</div>',
-    { title: '📚 科目设置' }
+    { title: '📚 成绩科目设置（含显示顺序）' }
   );
+  renderGradeSubjList();
   const foot = modalFootHtml('<button class="btn primary" data-action="saveSubjects">保存科目</button>');
   document.getElementById('modalBox').insertAdjacentHTML('beforeend', foot);
 }
 function fillSubjectPreset(type) {
   const names = SUBJECT_PRESETS[type] || [];
-  const lines = names.map((n, i) => n + ',' + SUBJECT_PALETTE[i % SUBJECT_PALETTE.length]).join('\n');
-  const ta = document.querySelector('#modalBox textarea[data-field="subjects"]');
-  if (ta) ta.value = lines;
+  if (document.getElementById('gradeSubjList')) {
+    gradeSubjDraft = names.slice();
+    renderGradeSubjList();
+  } else {
+    const ta = document.querySelector('#modalBox textarea[data-field="subjects"]');
+    if (ta) ta.value = names.map((n, i) => n + ',' + SUBJECT_PALETTE[i % SUBJECT_PALETTE.length]).join('\n');
+  }
+}
+function moveGradeSubject(idx, dir) {
+  const j = idx + (dir === 'up' ? -1 : 1);
+  if (idx >= 0 && j >= 0 && j < gradeSubjDraft.length) { const tmp = gradeSubjDraft[idx]; gradeSubjDraft[idx] = gradeSubjDraft[j]; gradeSubjDraft[j] = tmp; renderGradeSubjList(); }
+}
+function removeGradeSubject(idx) {
+  if (idx >= 0 && idx < gradeSubjDraft.length) gradeSubjDraft.splice(idx, 1);
+  renderGradeSubjList();
+}
+function addGradeSubject() {
+  const inp = document.getElementById('newGradeSubj');
+  const nm = (inp ? inp.value : '').trim();
+  if (!nm) { toast('请输入科目名', 'err'); return; }
+  if (gradeSubjDraft.indexOf(nm) >= 0) { toast('该科目已存在', 'err'); return; }
+  gradeSubjDraft.push(nm);
+  if (inp) inp.value = '';
+  renderGradeSubjList();
 }
 function saveSubjects() {
-  const v = readFields();
   const d = DB.data;
-  const names = [];
+  const names = gradeSubjDraft.slice();
+  if (!names.length) { toast('请至少保留一个科目', 'err'); return; }
   const colors = Object.assign({}, d.settings.subjectColors || {});
-  (v.subjects || '').split(/\n/).forEach(function (line) {
-    const parts = line.split(/[,，]/);
-    if (parts.length >= 1 && parts[0].trim()) {
-      const nm = parts[0].trim();
-      names.push(nm);
-      if (!colors[nm]) colors[nm] = SUBJECT_PALETTE[Object.keys(colors).length % SUBJECT_PALETTE.length];
-    }
-  });
-  if (!names.length) { toast('请至少填写一个科目', 'err'); return; }
-  d.settings.gradeSubjects = names;   /* 成绩板块独立科目列表 */
+  names.forEach(function (nm, i) { if (!colors[nm]) colors[nm] = SUBJECT_PALETTE[i % SUBJECT_PALETTE.length]; });
+  d.settings.gradeSubjects = names;
   d.settings.subjectColors = colors;
   DB.save(); closeModal(); render();
-  toast('成绩科目已保存（课表不受影响，可各自设置）');
+  toast('成绩科目与显示顺序已保存');
 }
-
 /* ---------- 查看成绩（只读）+ 导出 ---------- */
 function viewScoresModal(examId) {
   const d = DB.data;
@@ -2133,6 +2185,7 @@ function gradeClassScoresHtml() {
   if (!exams.length) return '<div class="card">' + emptyHtml('暂无成绩数据，请先录入成绩', '📝') + '</div>';
   const selId = state.classExamId && exams.find(e => e.id === state.classExamId) ? state.classExamId : exams[exams.length - 1].id;
   const exam = exams.find(e => e.id === selId);
+  const ordered = orderedSubjects(exam);
   const byStu = {};
   d.scores.filter(s => s.examId === selId).forEach(s => { byStu[s.studentId] = s; });
   const q = (state.classStuQuery || '').toLowerCase();
@@ -2161,9 +2214,9 @@ function gradeClassScoresHtml() {
   } else {
     stu = stu.sort((a, b) => ((byStu[a.id] && byStu[a.id].rank) || 999) - ((byStu[b.id] && byStu[b.id].rank) || 999));
   }
-  const hasMain = exam.subjects.some(s => MAIN_SUBJECTS.indexOf(s.name) >= 0);
+  const hasMain = ordered.some(s => MAIN_SUBJECTS.indexOf(s.name) >= 0);
   const hasCombo = currentStudents().some(s => comboSubjectsOf(s));
-  const subjHead = exam.subjects.map(s => '<th class="center">' + esc(s.name) + '<br><small class="sortable" data-action="sortClassScores" data-key="subj:' + esc(s.name) + '" title="点击排序">' + s.full + '分' + classSortArrow('subj:' + s.name) + '</small></th>').join('');
+  const subjHead = ordered.map(s => '<th class="center">' + esc(s.name) + '<br><small class="sortable" data-action="sortClassScores" data-key="subj:' + esc(s.name) + '" title="点击排序">' + s.full + '分' + classSortArrow('subj:' + s.name) + '</small></th>').join('');
   const head = '<tr><th class="center sortable" data-action="sortClassScores" data-key="rank" title="点击排序">排名' + classSortArrow('rank') + '</th><th style="min-width:120px">学生</th>' + subjHead +
     '<th class="center"><button type="button" class="btn btn-ico" data-action="classAddSubject" data-id="' + selId + '" title="添加科目">＋</button><button type="button" class="btn btn-ico danger" data-action="openDeleteSubjectModal" data-id="' + selId + '" title="删除科目">－</button></th>' +
     (hasMain ? '<th class="center sortable" data-action="sortClassScores" data-key="main" title="点击排序">主科总分' + classSortArrow('main') + '</th>' : '') +
@@ -2175,14 +2228,14 @@ function gradeClassScoresHtml() {
     const comboSubs = comboSubjectsOf(st);
     const comboTotal = sc && comboSubs ? comboSubs.reduce(function (a, nm) { const x = (sc.subjects || []).find(y => y.name === nm); return a + (x && x.score != null ? x.score : 0); }, 0) : 0;
     return '<tr><td class="num">' + (sc ? sc.rank : '—') + '</td><td><div class="stu-cell">' + avatarHtml(st) + '<div><div class="stu-name">' + esc(st.name) + '</div><div class="stu-no">' + esc(st.no) + '</div></div></div></td>' +
-      exam.subjects.map(sub => { const x = sc && (sc.subjects || []).find(y => y.name === sub.name); const val = x && x.score != null ? x.score : ''; return '<td class="num' + (val === '' ? ' muted' : '') + '">' + (val === '' ? '—' : val) + '</td>'; }).join('') +
+      ordered.map(sub => { const x = sc && (sc.subjects || []).find(y => y.name === sub.name); const val = x && x.score != null ? x.score : ''; return '<td class="num' + (val === '' ? ' muted' : '') + '">' + (val === '' ? '—' : val) + '</td>'; }).join('') +
       '<td class="center"></td>' +
       (hasMain ? '<td class="num" style="font-weight:600">' + (sc && mainTotal > 0 ? mainTotal : '—') + '</td>' : '') +
       (hasCombo ? '<td class="num">' + (sc && comboSubs && comboTotal > 0 ? comboTotal + '<small style="color:var(--text3)">(' + esc(comboSubs.join('+')) + ')</small>' : '—') + '</td>' : '') +
       '<td class="num" style="font-weight:700">' + (sc ? sc.total : '—') + '</td></tr>';
   }).join('');
   const sel = '<select id="classExamSel" style="border:1px solid var(--border);border-radius:10px;padding:8px 12px;min-width:200px">' + exams.map(e => '<option value="' + e.id + '"' + (e.id === selId ? ' selected' : '') + '>' + esc(e.name) + '</option>').join('') + '</select>';
-  const colCount = exam.subjects.length + 2 + (hasMain ? 1 : 0) + (hasCombo ? 1 : 0) + 1;
+  const colCount = ordered.length + 2 + (hasMain ? 1 : 0) + (hasCombo ? 1 : 0) + 1;
   return '<div class="card"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px">' +
     '<span class="badge primary">📝 考试</span>' + sel +
     '<button class="btn small primary" data-action="setClassExam">加载</button>' +
@@ -2353,6 +2406,84 @@ function attDetailModal(studentId) {
     '<div class="table-wrap" style="max-height:62vh;overflow:auto"><table class="tbl"><thead><tr><th>日期</th><th>状态</th></tr></thead><tbody>' + rows + '</tbody></table></div>',
     { title: '考勤明细 · ' + st.name, wide: true }
   );
+}
+
+function scoreCsvTemplate(examId) {
+  const d = DB.data;
+  const exam = d.exams.find(e => e.id === examId);
+  if (!exam) return;
+  const ordered = orderedSubjects(exam);
+  const head = ['学号', '姓名'].concat(ordered.map(s => s.name + '(' + s.full + ')'), ['总分']);
+  const rows = [head];
+  currentStudents().forEach(function (st) { rows.push([st.no, st.name].concat(ordered.map(function () { return ''; }), [''])); });
+  downloadFile('成绩录入模板_' + exam.name + '.csv', '﻿' + toCSV(rows), 'text/csv;charset=utf-8');
+  toast('空白模板已下载，按“学号,姓名,科目…,总分”填写后导入');
+}
+function parseCsvLine(line) {
+  const out = []; let cur = ''; let inQ = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (inQ) {
+      if (ch === '"') { if (line[i + 1] === '"') { cur += '"'; i++; } else inQ = false; }
+      else cur += ch;
+    } else if (ch === '"') inQ = true;
+    else if (ch === ',') { out.push(cur); cur = ''; }
+    else cur += ch;
+  }
+  out.push(cur);
+  return out;
+}
+function recalcScoreRow(tr) {
+  let sum = 0, has = 0;
+  tr.querySelectorAll('.score-input').forEach(function (x) { const v = parseFloat(x.value); if (!isNaN(v)) { sum += v; has++; } });
+  const t = tr.querySelector('.row-total'); if (t) t.textContent = has ? sum : '';
+  const r = tr.querySelector('.row-rank'); if (r) r.textContent = '';
+}
+function parseScoreCsv(examId, input) {
+  const file = input.files && input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function (ev) {
+    try {
+      const d = DB.data;
+      const exam = d.exams.find(e => e.id === examId);
+      if (!exam) return;
+      const text = String(ev.target.result || '').replace(/^﻿/, '');
+      const lines = text.split(/\r?\n/).map(x => x.trim()).filter(Boolean);
+      if (!lines.length) { toast('CSV 为空', 'err'); return; }
+      const header = parseCsvLine(lines[0]);
+      const noIdx = header.indexOf('学号');
+      const nameIdx = header.indexOf('姓名');
+      const ordered = orderedSubjects(exam);
+      const subCols = [];
+      ordered.forEach(function (sub) { const ci = header.indexOf(sub.name); if (ci >= 0) subCols.push({ name: sub.name, idx: ci }); });
+      if (noIdx < 0 && nameIdx < 0) { toast('CSV 缺少“学号”或“姓名”列', 'err'); return; }
+      let count = 0;
+      lines.slice(1).forEach(function (line) {
+        const cells = parseCsvLine(line);
+        const no = noIdx >= 0 ? String(cells[noIdx] || '').trim() : '';
+        const nm = nameIdx >= 0 ? String(cells[nameIdx] || '').trim() : '';
+        let st = null;
+        if (no) st = currentStudents().find(s => String(s.no).trim() === no);
+        if (!st && nm) st = currentStudents().find(s => s.name === nm);
+        if (!st) return;
+        const tr = document.querySelector('#modalBox .enter-table tbody tr[data-sid="' + st.id + '"]');
+        subCols.forEach(function (sc) {
+          const v = String(cells[sc.idx] || '').trim();
+          if (v === '') return;
+          const n = parseFloat(v);
+          if (isNaN(n)) return;
+          scoreDraft[st.id] = scoreDraft[st.id] || {};
+          scoreDraft[st.id][sc.name] = v;
+          if (tr) { const inp = tr.querySelector('.score-input[data-subject="' + sc.name + '"]'); if (inp) { inp.value = v; inp.classList.add('done'); } }
+        });
+        if (tr) recalcScoreRow(tr);
+        count++;
+      });
+      toast('已从 CSV 导入 ' + count + ' 名学生成绩，确认后点“保存成绩”生效');
+    } catch (e) { toast('CSV 解析失败：' + (e.message || e), 'err'); }
+  };
+  reader.readAsText(file, 'utf-8');
 }
 /* ================= 模块：班级事务（6 页签） ================= */
 function renderAffairs() {

@@ -968,7 +968,7 @@ function renderDataMgr() {
     '<button class="btn outline" data-action="importJson">导入 JSON 恢复</button>' +
     '<button class="btn outline" data-action="exportStudents">导出学生 CSV</button></div></div>' +
     '<div class="risk-zone"><div class="rz-title">⚠️ 危险操作区</div><div style="font-size:12.5px;color:var(--text2);margin-bottom:10px">以下操作会清空或重置本地数据，请谨慎操作。</div>' +
-    '<div class="btn-row"><button class="btn danger" data-action="clearDemo">清空演示数据</button><button class="btn danger-solid" data-action="resetDemo">重新生成演示数据</button></div></div>';
+    '<div class="btn-row"><button class="btn danger" data-action="clearAllData">清除现有数据（保留班级与设置）</button><button class="btn danger" data-action="clearDemo">清空演示数据</button><button class="btn danger-solid" data-action="resetDemo">重新生成演示数据</button></div></div>';
   const syncCard = (typeof syncCardHtml === 'function') ? syncCardHtml() : '';
   const ver = (typeof APP_VERSION !== 'undefined' && APP_VERSION) ? APP_VERSION : '?';
   return '<div class="page-title">💾 数据管理</div><div class="page-sub">数据总览、备份恢复与系统设置</div>' + overview +
@@ -1898,6 +1898,11 @@ const ACTIONS = {
   confirmDeleteSubject: function (el) { confirmDeleteSubject(el.dataset.id, el.dataset.subject); },
   undoDeleteSubject: function () { undoDeleteSubject(); },
   attDetail: function (el) { attDetailModal(el.dataset.id); },
+  moveGradeSubject: function (el) { moveGradeSubject(parseInt(el.dataset.idx, 10), el.dataset.dir); },
+  addGradeSubject: function () { addGradeSubject(); },
+  removeGradeSubject: function (el) { removeGradeSubject(parseInt(el.dataset.idx, 10)); },
+  scoreCsvPick: function () { const f = document.getElementById('scoreCsvFile'); if (f) f.click(); },
+  scoreCsvTemplate: function (el) { scoreCsvTemplate(el.dataset.id); },
   sortClassScores: function (el) { sortClassScores(el); },
   gradeTab: function (el) { state.gradeTab = el.dataset.tab; render(); },
   doCompare: function () {
@@ -2325,6 +2330,11 @@ const ACTIONS = {
     toast('JSON 备份已导出');
   },
   importJson: function () { document.getElementById('importJson').click(); },
+  clearAllData: function () {
+    confirmBox({ title: '清除现有数据', message: '将清除学生、成绩、考勤、积分、日志等全部业务数据（班级与系统设置、云同步配置保留），此操作不可恢复，请先导出备份！', danger: true, okText: '清除', onOk: function () {
+      DB.clearBusinessData(); render(); toast('现有数据已清除（班级与设置保留）');
+    }});
+  },
   clearDemo: function () {
     confirmBox({ title: '清空演示数据', message: '确定清空全部本地数据吗？此操作不可恢复，请先导出备份！', danger: true, okText: '清空', onOk: function () {
       DB.clearAll(); render(); toast('数据已清空');
