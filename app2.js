@@ -1935,6 +1935,11 @@ const ACTIONS = {
   addGradeSubject: function () { addGradeSubject(); },
   removeGradeSubject: function (el) { removeGradeSubject(parseInt(el.dataset.idx, 10)); },
   moveGradeSubjectByName: function (el) { moveGradeSubjectByName(el.dataset.name, el.dataset.dir); },
+  examSubjectEdit: function (el) { examSubjectEditModal(el.dataset.id); },
+  moveExamSubject: function (el) { moveExamSubject(parseInt(el.dataset.idx, 10), el.dataset.dir); },
+  addExamSubjectInEdit: function (el) { addExamSubjectInEdit(el.dataset.id); },
+  removeExamSubjectInEdit: function (el) { removeExamSubjectInEdit(parseInt(el.dataset.idx, 10)); },
+  examSubjectEditDone: function () { closeModal(); render(); },
   clearCloudData: function () {
     confirmBox({ title: '清除云端数据', message: '将删除云端备份的同步数据（本地数据保留）。若本地仍是演示数据，建议先“清除现有数据”再重新同步，避免把演示数据再传上去。', danger: true, okText: '清除云端', onOk: function () { SyncEngine.clearCloud(); } });
   },
