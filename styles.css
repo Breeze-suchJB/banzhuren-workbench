@@ -570,3 +570,7 @@ table.tbl{width:100%;border-collapse:collapse;font-size:13px;min-width:560px}
 .subj-arrows{display:inline-flex;gap:4px;margin-top:3px}
 .subj-move{width:22px;height:22px;line-height:18px;font-size:12px;padding:0;border:1px solid var(--border);border-radius:6px;background:#fff;color:var(--text2);cursor:pointer}
 .subj-move:hover{color:#fff;background:var(--primary);border-color:var(--primary)}
+
+.subj-order-row.dragging{opacity:.5}
+.subj-order-row.drag-over{border-color:var(--primary);background:var(--primary-light)}
+.subj-order-row{cursor:grab}

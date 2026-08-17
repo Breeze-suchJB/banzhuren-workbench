@@ -1179,6 +1179,7 @@ const SyncEngine = {
   },
   _onLocalChange: function () {
     if (this._applying || !this.enabled()) return;
+    if (DB.data.settings && DB.data.settings.demoMode) { this._dirty = true; this._setStatus('演示数据模式：不会自动上传云端（避免覆盖真实数据）', 'orange'); return; }
     this._dirty = true;
     this._setStatus('本地有未同步修改，稍后自动上传…', 'orange');
     clearTimeout(this._pushT);
@@ -1227,6 +1228,7 @@ const SyncEngine = {
   },
   push: async function () {
     if (!this.enabled() || this._busy) return;
+    if (DB.data.settings && DB.data.settings.demoMode) { this._setStatus('演示数据模式：不会上传云端（可先拉取真实数据，或录入真实数据后点“保存并立即同步”上传）', 'orange'); return; }
     this._busy = true;
     this._setStatus('正在上传同步…', 'blue');
     try {
@@ -1340,6 +1342,7 @@ const SyncEngine = {
         s2.lastSyncAt = syncNowIso();
         s2.lastError = '';
         this._dirty = false;
+        if (DB.data.settings) DB.data.settings.demoMode = false;  /* 拉取到真实数据后退出演示模式 */
         DB.save();
       } finally { this._applying = false; }
       render();
@@ -1403,6 +1406,7 @@ const SyncEngine = {
   },
   cardHtml: function () {
     const s = this.settings();
+    const demoNotice = (DB.data.settings && DB.data.settings.demoMode) ? '<div style="font-size:12.5px;color:var(--warn);margin-bottom:8px">⚠️ 当前为演示数据模式：不会自动上传云端，避免覆盖真实数据。录入真实数据后点“保存并立即同步”即可正常上传。</div>' : '';
     const isLC = s.provider === 'leancloud';
     const isSB = s.provider === 'supabase';
     const isWD = s.provider === 'webdav';
@@ -1432,7 +1436,7 @@ const SyncEngine = {
     const builtIn = (window.DEFAULT_SYNC && window.DEFAULT_SYNC.supUrl && s.supUrl === String(window.DEFAULT_SYNC.supUrl).trim())
       ? '<div style="font-size:12.5px;color:var(--ok, #16a34a);margin-bottom:8px">📌 已内置 Supabase 配置：更换网址/新设备打开时会自动恢复，无需重新填写。</div>' : '';
     return '<div class="card"><div class="card-title">☁️ 云同步（多设备实时同步）</div>' +
-      '<div id="syncStatus" class="sync-status">' + this.statusHtml() + '</div>' + builtIn +
+      '<div id="syncStatus" class="sync-status">' + this.statusHtml() + '</div>' + demoNotice + builtIn +
       '<div style="font-size:12.5px;color:var(--text3);margin-bottom:10px">在每台设备打开本工作台并填写<b>相同</b>的云同步凭据即可互通：本机修改约 2 秒自动上传，每 30 秒自动拉取，也可手动同步。</div>' +
       '<div class="form-grid"><div class="field"><label>同步方式</label><select data-field="syncProvider">' + providerOpts + '</select></div>' + body + '</div>' +
       '<div class="btn-row" style="margin-top:12px">' +
@@ -2405,6 +2409,7 @@ const ACTIONS = {
     if (v.syncKey) s.syncKey = String(v.syncKey).trim() || 'main';
     s.deviceName = (DB.data.settings.teacherName || '我的') + '的设备';
     s.lastError = '';
+    DB.data.settings.demoMode = false;  /* 手动同步=退出演示模式，允许上传 */
     SyncEngine._driverCache = null;
     SyncEngine._saveMeta();
     render();
@@ -2465,11 +2470,11 @@ function exportStudentsCsv(rStart, rEnd) {
   const S = rStart && rEnd ? (rStart <= rEnd ? rStart : rEnd) : '';
   const E = rStart && rEnd ? (rStart <= rEnd ? rEnd : rStart) : '';
   const inR = function (dt) { return !!dt && (!S || (dt >= S && dt <= E)); };
-  const head = ['学号', '姓名', '性别', '手机号', '住校', '职务', '家庭情况', '家长姓名', '监护人', '入学日期', '小组编号', '综合成绩', '排名', '积分', '预警标签', '标签'];
+  const head = ['学号', '姓名', '性别', '住校', '职务', '家庭情况', '家长1姓名', '家长1手机号', '家长2姓名', '家长2手机号', '监护人', '入学日期', '小组编号', '综合成绩', '排名', '积分', '预警标签', '标签'];
   if (S) { head.push('期内出勤', '期内迟到', '期内缺勤', '期内请假', '期内积分', '期内违纪', '期内沟通', '时间段'); }
   const rows = [head];
   currentStudents().forEach(s => {
-    const base = [s.no, s.name, s.gender, s.phone, s.boarding ? '是' : '否', s.position || '', s.family || '', s.parentName || '', s.guardian || '', s.admitDate || '', s.groupId || '', s.totalScore || '', s.classRank || '', s.score || 0, (s.warningTags || []).join('/'), (s.tags || []).join('/')];
+    const base = [s.no, s.name, s.gender, s.boarding ? '是' : '否', s.position || '', s.family || '', s.parentName || '', s.phone1 || s.phone || '', s.parent2Name || '', s.phone2 || '', s.guardian || '', s.admitDate || '', s.groupId || '', s.totalScore || '', s.classRank || '', s.score || 0, (s.warningTags || []).join('/'), (s.tags || []).join('/')];
     if (S) {
       const att = d.attendance.filter(a => a.studentId === s.id && inR(a.date));
       const pts = d.points.filter(p => p.studentId === s.id && inR(p.date));
@@ -2651,23 +2656,37 @@ document.addEventListener('input', function (e) {
 });
 
 document.addEventListener('dragstart', function (e) {
-  const row = e.target.closest ? e.target.closest('.dash-block-row, .dash-edit-card') : null;
-  if (row) { e.dataTransfer.setData('text/plain', row.getAttribute('data-id')); row.classList.add('dragging'); }
+  const row = e.target.closest ? e.target.closest('.dash-block-row, .dash-edit-card, .subj-order-row') : null;
+  if (row) {
+    if (row.classList.contains('subj-order-row')) { e.dataTransfer.setData('text/plain', 'idx:' + row.getAttribute('data-idx')); }
+    else { e.dataTransfer.setData('text/plain', row.getAttribute('data-id')); }
+    row.classList.add('dragging');
+  }
 });
 document.addEventListener('dragover', function (e) {
-  const row = e.target.closest ? e.target.closest('.dash-block-row, .dash-edit-card') : null;
+  const row = e.target.closest ? e.target.closest('.dash-block-row, .dash-edit-card, .subj-order-row') : null;
   if (row) { e.preventDefault(); row.classList.add('drag-over'); }
 });
 document.addEventListener('dragleave', function (e) {
-  const row = e.target.closest ? e.target.closest('.dash-block-row, .dash-edit-card') : null;
+  const row = e.target.closest ? e.target.closest('.dash-block-row, .dash-edit-card, .subj-order-row') : null;
   if (row) row.classList.remove('drag-over');
 });
 document.addEventListener('drop', function (e) {
   e.preventDefault();
   const from = e.dataTransfer.getData('text/plain');
-  const row = e.target.closest ? e.target.closest('.dash-block-row, .dash-edit-card') : null;
-  if (from && row) { moveDashBlock(from, row.getAttribute('data-id')); if (document.querySelector('.dash-edit-card')) dashEditOpen(); }
-  document.querySelectorAll('.dash-block-row, .dash-edit-card').forEach(function (r) { r.classList.remove('dragging', 'drag-over'); });
+  const row = e.target.closest ? e.target.closest('.dash-block-row, .dash-edit-card, .subj-order-row') : null;
+  if (from && row) {
+    if (from.indexOf('idx:') === 0) {
+      const fromIdx = parseInt(from.slice(4), 10);
+      const toIdx = parseInt(row.getAttribute('data-idx'), 10);
+      if (row.closest('#gradeSubjList')) moveGradeSubjDraft(fromIdx, toIdx);
+      else if (row.closest('#examSubjList')) moveExamSubjDraft(fromIdx, toIdx);
+    } else {
+      moveDashBlock(from, row.getAttribute('data-id'));
+      if (document.querySelector('.dash-edit-card')) dashEditOpen();
+    }
+  }
+  document.querySelectorAll('.dash-block-row, .dash-edit-card, .subj-order-row').forEach(function (r) { r.classList.remove('dragging', 'drag-over'); });
 });
 /* 仪表盘详情页：拖拽右下角调整大小 */
 let __dashResize = null;

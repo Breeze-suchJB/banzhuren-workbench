@@ -1,5 +1,5 @@
 /* 构建版本 */
-const APP_VERSION = '20260817-161829';
+const APP_VERSION = '20260817-222933';
 /* ================= 数据层 ================= */
 const STORAGE_KEY = 'banzhuren_workbench_v1';
 const NO_DEMO_KEY = 'banzhuren_no_demo';
@@ -118,7 +118,7 @@ function genNames(n) {
   let guard = 0;
   while (names.length < n && guard < 5000) {
     guard++;
-    const name = pick(SURNAMES) + pick(GIVEN) + (rnd() < 0.25 ? pick(GIVEN) : '');
+    const name = pick(SURNAMES) + pick(GIVEN);  /* 统一 3 个汉字：姓 + 两字名 */
     if (!set.has(name)) { set.add(name); names.push(name); }
   }
   return names;
@@ -583,7 +583,16 @@ const DB = {
     return out;
   },
   resetDemo() {
+    /* 保留用户设置（云同步配置/仪表盘/科目顺序等），演示数据不自动上传云端 */
+    let oldSettings = null;
+    try { if (this.data && this.data.settings) oldSettings = JSON.parse(JSON.stringify(this.data.settings)); } catch (e) {}
     this.data = demoData();
+    if (oldSettings) {
+      const base = this.data.settings;
+      Object.keys(oldSettings).forEach(function (k) { if (k !== 'sync' || oldSettings.sync) base[k] = oldSettings[k]; });
+      this.data.settings = base;
+    }
+    this.data.settings.demoMode = true;
     try { localStorage.removeItem(NO_DEMO_KEY); } catch (e) {}
     this.save();
   },
@@ -1427,10 +1436,12 @@ function studentFormModal(st) {
     field('no', '学号', st.no || '', 'text') +
     field('gender', '性别', st.gender || '男', 'select', '', optionsHtml(['男', '女'], st.gender)) +
     field('boarding', '住走', st.boarding ? '是' : '否', 'select', '', optionsHtml(['是', '否'], st.boarding ? '是' : '否')) +
-    field('phone', '手机号', st.phone || '', 'text') +
     field('position', '职务', st.position || '', 'text') +
     field('family', '家庭情况', st.family || '', 'text') +
-    field('parentName', '家长姓名', st.parentName || '', 'text') +
+    field('parentName', '家长1 姓名', st.parentName || '', 'text') +
+    field('phone1', '家长1 手机号', st.phone1 || st.phone || '', 'text') +
+    field('parent2Name', '家长2 姓名', st.parent2Name || '', 'text') +
+    field('phone2', '家长2 手机号', st.phone2 || '', 'text') +
     field('guardian', '监护人', st.guardian || '', 'text') +
     field('groupId', '小组编号', st.groupId || 1, 'number', 'min="1"') +
     field('admitDate', '入学日期', st.admitDate || '', 'date') +
@@ -1453,7 +1464,7 @@ function saveStudent(id) {
   document.querySelectorAll('#modalBox [data-chipgroup="tags"] .chip.on').forEach(el => tags.push(el.getAttribute('data-chip')));
   document.querySelectorAll('#modalBox [data-chipgroup="warns"] .chip.on').forEach(el => warns.push(el.getAttribute('data-chip')));
   const payload = {
-    name: v.name, no: v.no, gender: v.gender, phone: v.phone,
+    name: v.name, no: v.no, gender: v.gender, phone1: v.phone1 || v.phone || '', phone: v.phone1 || v.phone || '', parent2Name: v.parent2Name || '', phone2: v.phone2 || '',
     boarding: v.boarding === '是', position: v.position, family: v.family,
     parentName: v.parentName, guardian: v.guardian, groupId: parseInt(v.groupId || '1', 10) || 1,
     admitDate: v.admitDate, tags: tags, warningTags: warns
@@ -1500,7 +1511,7 @@ function openStudentDrawer(id) {
       '<div><div style="font-size:19px;font-weight:800">' + esc(st.name) + ' <span style="font-size:12px;color:var(--text3);font-weight:400">' + esc(st.no) + '</span></div>' +
       '<div style="font-size:12.5px;color:var(--text2);margin-top:2px">' + esc(st.gender) + ' · ' + (st.boarding ? '住校' : '走读') + ' · 第' + (st.groupId || 1) + '组</div></div></div>' +
     '<div class="drawer-section"><div class="ds-title">基本信息</div><div class="kv-list">' +
-      '<div class="kv"><b>手机号</b><span>' + esc(maskPhone(st.phone)) + '</span></div><div class="kv"><b>家长</b><span>' + esc(st.parentName || '—') + '</span></div>' +
+      '<div class="kv"><b>家长1</b><span>' + esc(st.parentName || '—') + ' · ' + esc(maskPhone(st.phone1 || st.phone || '')) + '</span></div><div class="kv"><b>家长2</b><span>' + esc((st.parent2Name || '—') + (st.phone2 ? ' · ' + maskPhone(st.phone2) : '')) + '</span></div>' +
       '<div class="kv"><b>监护人</b><span>' + esc(st.guardian || '—') + '</span></div><div class="kv"><b>家庭情况</b><span>' + esc(st.family || '正常') + '</span></div>' +
       '<div class="kv"><b>职务</b><span>' + esc(st.position || '—') + '</span></div><div class="kv"><b>入学日期</b><span>' + esc(st.admitDate || '—') + '</span></div>' +
       '<div class="kv"><b>考勤率</b><span>' + Math.round((st.attendanceRate || 0) * 100) + '%</span></div><div class="kv"><b>综合成绩</b><span>' + total + ' 分 · 第 ' + (st.classRank || '—') + ' 名</span></div>' +
@@ -2093,7 +2104,7 @@ function renderGradeSubjList() {
   if (!box) return;
   box.innerHTML = gradeSubjDraft.map(function (nm, i) {
     const color = (DB.data.settings.subjectColors || {})[nm] || SUBJECT_PALETTE[i % SUBJECT_PALETTE.length];
-    return '<div class="subj-order-row" data-idx="' + i + '">' +
+    return '<div class="subj-order-row" draggable="true" data-idx="' + i + '">' +
       '<span class="sor-dot" style="background:' + color + '"></span>' +
       '<span class="sor-name">' + esc(nm) + '</span>' +
       '<button type="button" class="btn btn-ico" data-action="moveGradeSubject" data-dir="up" data-idx="' + i + '" title="上移">↑</button>' +
@@ -2570,7 +2581,7 @@ function examSubjectEditModal(examId) {
   const exam = d.exams.find(e => e.id === examId);
   if (!exam) return;
   const rows = exam.subjects.map(function (s, i) {
-    return '<div class="subj-order-row" data-idx="' + i + '">' +
+    return '<div class="subj-order-row" draggable="true" data-idx="' + i + '">' +
       '<span class="sor-dot" style="background:' + (subjectColor(s.name) || '#888') + '"></span>' +
       '<span class="sor-name">' + esc(s.name) + ' · ' + s.full + '分</span>' +
       '<button type="button" class="btn btn-ico" data-action="moveExamSubject" data-idx="' + i + '" data-dir="up" title="左移/上移">◀</button>' +
@@ -2616,6 +2627,27 @@ function removeExamSubjectInEdit(idx) {
   if (!exam || !exam.subjects[idx]) return;
   const name = exam.subjects[idx].name;
   examRemoveSubject(exam.id, name);
+  examSubjectEditModal(exam.id);
+}
+
+function moveGradeSubjDraft(fromIdx, toIdx) {
+  if (fromIdx < 0 || toIdx < 0 || fromIdx >= gradeSubjDraft.length || toIdx >= gradeSubjDraft.length || fromIdx === toIdx) return;
+  const it = gradeSubjDraft.splice(fromIdx, 1)[0];
+  gradeSubjDraft.splice(toIdx, 0, it);
+  renderGradeSubjList();
+}
+function moveExamSubjDraft(fromIdx, toIdx) {
+  const btn = document.querySelector('#modalBox [data-action="addExamSubjectInEdit"]');
+  if (!btn) return;
+  const d = DB.data;
+  const exam = d.exams.find(e => e.id === btn.dataset.id);
+  if (!exam || fromIdx < 0 || toIdx < 0 || fromIdx >= exam.subjects.length || toIdx >= exam.subjects.length || fromIdx === toIdx) return;
+  const it = exam.subjects.splice(fromIdx, 1)[0];
+  exam.subjects.splice(toIdx, 0, it);
+  const order = d.settings.gradeSubjects || [];
+  const a = order.indexOf(it.name);
+  if (a >= 0) { const t2 = order.splice(a, 1)[0]; const b = exam.subjects.indexOf(t2); order.splice(Math.max(0, b), 0, t2); }
+  DB.save();
   examSubjectEditModal(exam.id);
 }
 /* ================= 模块：班级事务（6 页签） ================= */
