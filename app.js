@@ -1,5 +1,5 @@
 /* 构建版本 */
-const APP_VERSION = '20260817-114641';
+const APP_VERSION = '20260817-120445';
 /* ================= 数据层 ================= */
 const STORAGE_KEY = 'banzhuren_workbench_v1';
 const DB_VERSION = 1;
@@ -361,7 +361,7 @@ function demoData() {
       { day: '周四', students: curClass.slice(18, 24).map(s => s.name) },
       { day: '周五', students: curClass.slice(24, 30).map(s => s.name) }
     ],
-    roomDuty: { days: [
+    roomDuty: { cursor: 0, days: [
       { day: '周一', name: '' },
       { day: '周二', name: '' },
       { day: '周三', name: '' },
@@ -518,6 +518,7 @@ const DB = {
     if (!out.schedule.grid) out.schedule.grid = {};
     if (!out.duties || !out.duties.days) out.duties = { week: '第1周', days: [] };
     if (!out.duties.roomDuty || !out.duties.roomDuty.days) out.duties.roomDuty = { days: (out.duties.days || []).map(x => ({ day: x.day || '', name: '' })) };
+    if (typeof out.duties.roomDuty.cursor !== 'number') out.duties.roomDuty.cursor = 0;
     if (!out.fiveEval || typeof out.fiveEval !== 'object') out.fiveEval = {};
     if (!out.subjectChoices || typeof out.subjectChoices !== 'object') out.subjectChoices = {};
     if (!out.safety || typeof out.safety !== 'object') out.safety = { physical: [], retention: [], safetyLedger: [], mental: [] };
@@ -1250,11 +1251,29 @@ function saveClass(id) {
 }
 
 /* ================= 模块：学生管理 ================= */
+function studentSortArrow(key) {
+  const ss = state.studentSort || {};
+  if (ss.key === key) return ss.dir === 1 ? ' ▲' : ' ▼';
+  return ' ⇅';
+}
 function renderStudents() {
   const cc = currentClass();
   const q = (state.studentQuery || '').toLowerCase();
   let list = currentStudents();
   if (q) list = list.filter(s => s.name.toLowerCase().indexOf(q) >= 0 || String(s.no).indexOf(q) >= 0);
+  const ss = state.studentSort || {};
+  if (ss.key) {
+    const dir = ss.dir;
+    list = list.slice().sort(function (a, b) {
+      const va = a[ss.key], vb = b[ss.key];
+      const na = (va == null || va === '' || va === '—') ? null : va;
+      const nb = (vb == null || vb === '' || vb === '—') ? null : vb;
+      if (na == null && nb == null) return 0;
+      if (na == null) return 1;
+      if (nb == null) return -1;
+      return (na - nb) * dir;
+    });
+  }
   const rows = list.map(s => {
     const warn = (s.warningTags || []).slice(0, 2).map(w => '<span class="badge red">' + esc(w) + '</span>').join(' ');
     const tags = (s.tags || []).slice(0, 3).map(t => '<span class="badge gray">' + esc(t) + '</span>').join(' ');
@@ -1272,6 +1291,9 @@ function renderStudents() {
       '<td class="actions"><button class="btn btn-ico" data-action="editStudent" data-id="' + s.id + '" title="编辑">✏️</button><button class="btn btn-ico danger" data-action="delStudent" data-id="' + s.id + '" title="删除">🗑️</button></td>' +
       '</tr>';
   }).join('');
+  const th = function (key, label) {
+    return '<th class="sortable' + (ss.key === key ? ' on' : '') + '" data-action="sortStudents" data-key="' + key + '" title="点击切换升降序">' + label + studentSortArrow(key) + '</th>';
+  };
   return '<div class="page-title">👥 学生管理</div><div class="page-sub">当前班级：' + esc(cc ? cc.name : '—') + ' · 共 ' + currentStudents().length + ' 名学生</div>' +
     '<div class="toolbar">' +
       '<span class="badge primary" style="font-size:12.5px">' + esc(cc ? cc.name : '') + '</span>' +
@@ -1280,35 +1302,9 @@ function renderStudents() {
       '<button class="btn outline" data-action="exportStudents">导出 CSV</button>' +
       '<button class="btn primary" data-action="addStudent">＋ 新增学生</button>' +
     '</div>' +
-    '<div class="table-wrap"><table class="tbl"><thead><tr><th>学生</th><th>性别 / 住走</th><th>考勤率</th><th>成绩</th><th>排名</th><th>积分</th><th>预警</th><th>标签</th><th>操作</th></tr></thead><tbody>' + (rows || '<tr><td colspan="9">' + emptyHtml('未找到学生', '🔍') + '</td></tr>') + '</tbody></table></div>';
+    '<div class="table-wrap"><table class="tbl"><thead><tr><th>学生</th><th>性别 / 住走</th>' + th('attendanceRate', '考勤率') + th('totalScore', '成绩') + th('classRank', '排名') + th('score', '积分') + '<th>预警</th><th>标签</th><th>操作</th></tr></thead><tbody>' + (rows || '<tr><td colspan="9">' + emptyHtml('未找到学生', '🔍') + '</td></tr>') + '</tbody></table></div>';
 }
 
-function studentFormModal(stu) {
-  stu = stu || {};
-  const d = DB.data;
-  const tags = (stu.tags || []).slice();
-  const warns = (stu.warningTags || []).slice();
-  openModal(
-    '<div class="form-grid">' +
-    field('name', '姓名 *', stu.name || '', 'text') +
-    field('no', '学号', stu.no || '', 'text') +
-    field('gender', '性别', stu.gender || '男', 'select', '', optionsHtml(['男', '女'], stu.gender)) +
-    field('phone', '手机号', stu.phone || '', 'text') +
-    field('boarding', '是否住校', stu.boarding ? '是' : '否', 'select', '', optionsHtml(['是', '否'], stu.boarding ? '是' : '否')) +
-    field('position', '班干部职务', stu.position || '', 'select', '', optionsHtml(['', '班长', '学习委员', '纪律委员', '卫生委员', '体育委员', '文艺委员', '心理委员', '电教员'], stu.position)) +
-    field('family', '家庭情况', stu.family || '正常', 'select', '', optionsHtml(['正常', '留守学生', '单亲家庭', '低保家庭', '脱贫户', '贫困学生'], stu.family)) +
-    field('parentName', '家长姓名', stu.parentName || '', 'text') +
-    field('guardian', '监护人', stu.guardian || '', 'text') +
-    field('groupId', '小组编号', stu.groupId || '', 'number', 'min="1" max="12"') +
-    field('admitDate', '入学日期', stu.admitDate || '2025-09-01', 'date') +
-    '<div class="field full"><label>常用标签（点击选择）</label><div class="chip-row" data-chipgroup="tags">' + chipsHtml(d.settings.tagLibrary, tags) + '</div></div>' +
-    '<div class="field full"><label>预警标签（点击选择）</label><div class="chip-row" data-chipgroup="warns">' + chipsHtml(d.settings.tagLibrary.concat(['近期成绩下滑', '经常迟到', '家庭变故']), warns, 'danger') + '</div></div>' +
-    '</div>',
-    { title: stu.id ? '编辑学生：' + stu.name : '新增学生', wide: false }
-  );
-  const foot = modalFootHtml('<button class="btn primary" data-action="saveStudent" data-id="' + (stu.id || '') + '">保存</button>');
-  document.getElementById('modalBox').insertAdjacentHTML('beforeend', foot);
-}
 function saveStudent(id) {
   const v = readFields();
   if (!v.name) { toast('请填写姓名', 'err'); return; }
@@ -1402,7 +1398,7 @@ function examFormModal(exam) {
     '<div class="form-grid">' +
     field('name', '考试名称 *', exam.name || '', 'text', 'placeholder="如：第一次月考"') +
     field('date', '考试日期', exam.date || todayStr(), 'date') +
-    field('subjects', '科目（逗号分隔）', subj || '语文,数学,英语,物理,化学,生物,政治,历史,地理', 'text', 'full placeholder="用英文逗号分隔科目，默认满分 100"') +
+    field('subjects', '科目（逗号分隔，可写“科目:满分”如 语文:120,数学:120）', subj || '语文:120,数学:120,英语:120,物理,化学,生物,政治,历史,地理', 'text', 'full placeholder="如：语文:120,数学:120,英语（默认100分）"') +
     field('total', '总分（自动计算可不填）', exam.total || '', 'number', '') +
     '</div>',
     { title: exam.id ? '编辑考试' : '新建考试' }
@@ -1414,7 +1410,11 @@ function saveExam(id) {
   const v = readFields();
   if (!v.name) { toast('请填写考试名称', 'err'); return; }
   const d = DB.data;
-  const subjects = v.subjects.split(/[,，]/).map(x => x.trim()).filter(Boolean).map(n => ({ name: n, full: 100 }));
+  const subjects = v.subjects.split(/[,，]/).map(x => x.trim()).filter(Boolean).map(tok => {
+    const m = tok.match(/^(.+?)[:：/](\d+)$/);
+    if (m) return { name: m[1].trim(), full: parseInt(m[2], 10) || 100 };
+    return { name: tok, full: 100 };
+  });
   if (!subjects.length) { toast('请填写至少一个科目', 'err'); return; }
   const total = parseInt(v.total || '0', 10) || subjects.reduce((a, b) => a + b.full, 0);
   if (id) {
@@ -1434,7 +1434,7 @@ function enterScoreModal(examId) {
   const stu = currentStudents().slice().sort((a, b) => (a.classRank || 999) - (b.classRank || 999));
   const existing = {};
   d.scores.filter(s => s.examId === examId).forEach(s => { existing[s.studentId] = s; });
-  const head = '<tr><th style="min-width:130px">学生</th>' + exam.subjects.map(s => '<th>' + esc(s.name) + '<br><small style="font-weight:400">' + s.full + '分</small></th>').join('') + '<th>总分</th><th>排名</th></tr>';
+  const head = '<tr><th style="min-width:130px">学生</th>' + exam.subjects.map(s => '<th data-subject="' + esc(s.name) + '">' + esc(s.name) + '<br><small class="full-label" style="font-weight:400">' + s.full + '分</small></th>').join('') + '<th>总分</th><th>排名</th></tr>';
   const rows = stu.map(s => {
     const sc = existing[s.studentId];
     const inputs = exam.subjects.map(sub => {
@@ -1445,9 +1445,12 @@ function enterScoreModal(examId) {
     const rank = sc ? sc.rank : '';
     return '<tr data-sid="' + s.id + '"><td class="stu-nm">' + esc(s.name) + ' <small style="color:var(--text3);font-weight:400">' + esc(s.no) + '</small></td>' + inputs + '<td class="row-total">' + total + '</td><td class="row-rank">' + rank + '</td></tr>';
   }).join('');
+  const fullRow = '<div class="full-score-row" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;align-items:flex-end">' +
+    exam.subjects.map(sub => '<div class="field" style="margin:0"><label>' + esc(sub.name) + ' 满分</label><input type="number" class="full-score-input" data-subject="' + esc(sub.name) + '" value="' + sub.full + '" min="1" max="500" style="width:84px"></div>').join('') +
+    '<span class="hint" style="font-size:12px;color:var(--text3);padding-bottom:6px">修改满分后失焦/回车即生效（如初中数学120、高中数学150）</span></div>';
   openModal(
     '<div style="font-size:13px;color:var(--text2);margin-bottom:10px">' + esc(exam.name) + ' · ' + esc(exam.date) + ' · 填写各科成绩后保存，自动计算总分与班级排名</div>' +
-    '<div class="table-wrap" style="max-height:62vh;overflow:auto"><table class="enter-table"><thead>' + head + '</thead><tbody>' + rows + '</tbody></table></div>',
+    fullRow + '<div class="table-wrap" style="max-height:62vh;overflow:auto"><table class="enter-table"><thead>' + head + '</thead><tbody>' + rows + '</tbody></table></div>',
     { title: '成绩录入 · ' + exam.name, wide: true }
   );
   const foot = modalFootHtml('<button class="btn primary" data-action="saveScores" data-id="' + examId + '">保存成绩</button>');
@@ -1461,6 +1464,21 @@ function enterScoreModal(examId) {
       tr.querySelectorAll('.score-input').forEach(function (x) { const v = parseFloat(x.value); if (!isNaN(v)) { sum += v; has++; } });
       tr.querySelector('.row-total').textContent = has ? sum : '';
       tr.querySelector('.row-rank').textContent = '';
+    });
+  });
+  document.getElementById('modalBox').querySelectorAll('.full-score-input').forEach(function (inp) {
+    inp.addEventListener('change', function () {
+      const nm = inp.getAttribute('data-subject');
+      let v = parseInt(inp.value, 10);
+      if (isNaN(v) || v < 1) v = 100;
+      const sub = exam.subjects.find(s => s.name === nm);
+      if (sub) sub.full = v;
+      inp.value = v;
+      const lbl = document.querySelector('#modalBox th[data-subject="' + nm + '"] .full-label');
+      if (lbl) lbl.textContent = v + '分';
+      document.querySelectorAll('#modalBox .score-input[data-subject="' + nm + '"]').forEach(function (x) { x.max = v; });
+      DB.save();
+      toast('已修改' + nm + '满分为 ' + v + ' 分');
     });
   });
 }
@@ -1888,12 +1906,37 @@ function affDutyHtml() {
     '<button class="btn small primary" data-action="rotateDuty">🔁 一键轮换（整组顺延一天）</button>' +
     '<button class="btn small primary" data-action="autoRoomDuty">✨ 一键生成教室值日（避开当日小组）</button>' +
     '</div>' +
-    '<div style="margin-top:8px;font-size:12px;color:var(--text3)">教室值日：负责课室卫生（黑板擦、讲台等），单人；自动生成时尽量避开当天值日小组人员，可点击“编辑值日表”手动修改。</div></div>';
+    '<div style="margin-top:8px;font-size:12px;color:var(--text3)">教室值日：负责课室卫生（黑板擦、讲台等），单人，按全班学号顺序循环轮值，全部同学轮完后自动重新开始；自动生成时会避开当天的值日小组人员，可点击“编辑值日表”手动修改。</div></div>';
+}
+function roomOrder() {
+  return currentStudents().slice().sort(function (a, b) {
+    return (parseInt(a.no, 10) || 0) - (parseInt(b.no, 10) || 0) || a.name.localeCompare(b.name, 'zh');
+  });
+}
+function buildRoomWeek(startIdx) {
+  const days = DB.data.duties.days || [];
+  const order = roomOrder();
+  const n = order.length;
+  if (!n) return [];
+  let cursor = startIdx || 0;
+  const result = [];
+  days.forEach(function (day) {
+    const group = new Set(day.students || []);
+    let pick = null;
+    for (let k = 0; k < n; k++) {
+      const idx = (cursor + k) % n;
+      if (!group.has(order[idx].name)) { pick = order[idx]; break; }
+    }
+    if (!pick) pick = order[cursor % n];
+    result.push(pick.name);
+    cursor = (cursor + 1) % n;
+  });
+  return result;
 }
 function rotateDuty() {
   confirmBox({
     title: '一键轮换值日',
-    message: '将每个“值日小组”整组顺延到下一天（周一→周二，…，周五→周一）？教室值日也会一起顺延。',
+    message: '将每个“值日小组”整组顺延到下一天（周一→周二，…，周五→周一）？教室值日也会按全班学号顺序轮到下一位同学。',
     okText: '轮换',
     onOk: function () {
       const d = DB.data;
@@ -1901,37 +1944,31 @@ function rotateDuty() {
       if (!days.length) { toast('暂无值日安排', 'err'); return; }
       const groups = days.map(x => (x.students || []).slice());
       days.forEach((x, i) => { x.students = groups[(i + 1) % groups.length]; });
-      const rdDays = (d.duties.roomDuty && d.duties.roomDuty.days) || [];
-      if (rdDays.length) {
-        const rdNames = rdDays.map(x => x.name || '');
-        rdDays.forEach((x, i) => { x.name = rdNames[(i + 1) % rdNames.length]; });
+      const rd = d.duties.roomDuty = d.duties.roomDuty || { days: [] };
+      const order = roomOrder();
+      if (order.length) {
+        rd.cursor = ((rd.cursor || 0) + 1) % order.length;
+        const names = buildRoomWeek(rd.cursor);
+        rd.days = days.map((day, i) => ({ day: day.day, name: names[i] || '' }));
       }
       DB.save(); render();
-      toast('值日已轮换（整组顺延一天）');
+      toast('值日已轮换（教室值日轮到下一位同学）');
     }
   });
 }
 function autoRoomDuty() {
   const d = DB.data;
-  const stu = currentStudents();
   const days = d.duties.days || [];
-  if (!stu.length) { toast('当前班级暂无学生', 'err'); return; }
+  const order = roomOrder();
+  if (!order.length) { toast('当前班级暂无学生', 'err'); return; }
   if (!days.length) { toast('请先设置值日表', 'err'); return; }
-  const used = new Set();
-  const result = days.map(day => {
-    const group = new Set(day.students || []);
-    const pool = stu.filter(s => !group.has(s.name) && !used.has(s.name));
-    const pick = pool.length ? pool[Math.floor(Math.random() * pool.length)] : null;
-    if (pick) { used.add(pick.name); return pick.name; }
-    const pool2 = stu.filter(s => !group.has(s.name));
-    const pick2 = pool2.length ? pool2[Math.floor(Math.random() * pool2.length)] : null;
-    if (pick2) { used.add(pick2.name); return pick2.name; }
-    return '';
-  });
-  d.duties.roomDuty = d.duties.roomDuty || { days: [] };
-  d.duties.roomDuty.days = days.map((day, i) => ({ day: day.day, name: result[i] }));
+  const rd = d.duties.roomDuty = d.duties.roomDuty || { days: [] };
+  const start = rd.cursor || 0;
+  const names = buildRoomWeek(start);
+  rd.days = days.map((day, i) => ({ day: day.day, name: names[i] || '' }));
+  rd.cursor = (start + days.length) % order.length;
   DB.save(); render();
-  toast('已生成教室值日（尽量避开当日小组）');
+  toast('已按全班学号循环生成教室值日（轮完自动重新开始）');
 }
 function dutyFormModal() {
   const d = DB.data;

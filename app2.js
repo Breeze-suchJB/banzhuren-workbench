@@ -962,7 +962,8 @@ function renderDataMgr() {
   const danger = '<div class="card"><div class="card-title">💾 数据备份与恢复</div><div class="btn-row">' +
     '<button class="btn primary" data-action="exportJson">导出 JSON 完整备份</button>' +
     '<button class="btn outline" data-action="importJson">导入 JSON 恢复</button>' +
-    '<button class="btn outline" data-action="exportStudents">导出学生 CSV</button></div></div>' +
+    '<button class="btn outline" data-action="exportStudents">导出学生 CSV</button>' +
+    '<button class="btn outline" data-action="exportRangeOpen">按时间段导出</button></div></div>' +
     '<div class="risk-zone"><div class="rz-title">⚠️ 危险操作区</div><div style="font-size:12.5px;color:var(--text2);margin-bottom:10px">以下操作会清空或重置本地数据，请谨慎操作。</div>' +
     '<div class="btn-row"><button class="btn danger" data-action="clearDemo">清空演示数据</button><button class="btn danger-solid" data-action="resetDemo">重新生成演示数据</button></div></div>';
   const syncCard = (typeof syncCardHtml === 'function') ? syncCardHtml() : '';
@@ -1034,6 +1035,65 @@ function saveProfilePrefs() {
   toast('偏好已保存');
 }
 
+
+
+/* ---------- 按时间段导出 ---------- */
+function rangeRecords(start, end) {
+  const d = DB.data;
+  const S = start <= end ? start : end, E = start <= end ? end : start;
+  const inR = function (dt) { return !!dt && dt >= S && dt <= E; };
+  const any = function (r) { return [r.date, r.start, r.end, r.assignDate, r.dueDate, r.createdAt].some(inR); };
+  const out = { attendance: [], leaves: [], points: [], violations: [], contacts: [], logs: [], talks: [], activities: [], departures: [], notices: [], homeworks: [] };
+  ['attendance', 'leaves', 'points', 'violations', 'contacts', 'logs', 'talks', 'activities', 'departures', 'notices', 'homeworks'].forEach(function (k) {
+    (d[k] || []).forEach(function (r) { if (any(r)) out[k].push(r); });
+  });
+  return { S: S, E: E, data: out };
+}
+function exportRangeOpen() {
+  openModal(
+    '<div class="form-grid">' +
+    field('rStart', '开始日期', dateAdd(todayStr(), -30), 'date') +
+    field('rEnd', '结束日期', todayStr(), 'date') +
+    '<div style="font-size:12.5px;color:var(--text3)">按时间段导出考勤、请假、积分、违纪、家校沟通、工作日志、谈心谈话、活动、离校登记、通知、作业等记录。</div>' +
+    '</div>',
+    { title: '按时间段导出' }
+  );
+  const foot = modalFootHtml('<button class="btn outline" data-action="exportRangeCsv">导出 CSV 明细</button><button class="btn primary" data-action="exportRangeJson">导出 JSON 备份</button>');
+  document.getElementById('modalBox').insertAdjacentHTML('beforeend', foot);
+}
+function exportRangeCsv() {
+  const v = readFields();
+  if (!v.rStart || !v.rEnd) { toast('请选择起止日期', 'err'); return; }
+  const rr = rangeRecords(v.rStart, v.rEnd);
+  const d = rr.data, gs = function (id) { const st = getStudent(id); return st ? st.name : '未知'; };
+  const rows = [['类别', '日期', '学生', '内容/说明', '数值', '状态']];
+  const push = function (cat, dt, stu, content, val, st) { rows.push([cat, dt, stu, content, val, st]); };
+  d.attendance.forEach(r => push('考勤', r.date, gs(r.studentId), r.status, '', ''));
+  d.leaves.forEach(r => push('请假', r.start + '~' + r.end, gs(r.studentId), r.reason, r.days + '天', r.status));
+  d.points.forEach(r => push('积分', r.date, gs(r.studentId), r.reason, r.value, r.type));
+  d.violations.forEach(r => push('违纪', r.date, gs(r.studentId), r.desc, '', r.handle));
+  d.contacts.forEach(r => push('家校沟通', r.date, gs(r.studentId), r.content, '', r.status));
+  d.logs.forEach(r => push('工作日志', r.date, '', r.content, r.hours + '小时', ''));
+  d.talks.forEach(r => push('谈心谈话', r.date, gs(r.studentId), r.content, '', ''));
+  d.activities.forEach(r => push('活动', r.date, '', r.name + (r.desc || ''), '', ''));
+  d.departures.forEach(r => push('离校登记', r.date, gs(r.studentId), (r.leaveTime || '') + '~' + (r.backTime || ''), '', ''));
+  d.notices.forEach(r => push('通知', r.date, '', r.title, '', ''));
+  d.homeworks.forEach(r => push('作业', (r.assignDate || '') + '~' + (r.dueDate || ''), '', r.title, '', r.subject));
+  downloadFile('工作台数据_' + rr.S + '_' + rr.E + '.csv', '﻿' + toCSV(rows), 'text/csv;charset=utf-8');
+  closeModal();
+  toast('已导出 ' + (rows.length - 1) + ' 条记录');
+}
+function exportRangeJson() {
+  const v = readFields();
+  if (!v.rStart || !v.rEnd) { toast('请选择起止日期', 'err'); return; }
+  const rr = rangeRecords(v.rStart, v.rEnd);
+  const summary = {};
+  Object.keys(rr.data).forEach(function (k) { summary[k] = rr.data[k].length; });
+  const payload = { type: '班主任工作台·按时间段导出', range: rr.S + '~' + rr.E, exportedAt: new Date().toISOString(), summary: summary, data: rr.data };
+  downloadFile('工作台数据_' + rr.S + '_' + rr.E + '.json', JSON.stringify(payload, null, 2), 'application/json');
+  closeModal();
+  toast('已导出 JSON 备份');
+}
 /* ================= 云同步（多设备实时同步） ================= */
 /* 驱动：LeanCloud 国际版（免备案、国内可直连）/ 自建 WebDAV（需开启 CORS）
    策略：整库上传，版本号 rev 递增，新版本覆盖旧版本（最后保存者胜）；
@@ -1568,7 +1628,7 @@ const state = {
   gradeTab: 'entry', attTab: 'daily', hwTab: 'list', affTab: 'point', moralTab: 'class',
   contactTab: 'book', evalTab: 'comment', workTab: 'todo', safeTab: 'physical',
   assistTab: 'talk', subjTab: 'lesson', legalRange: '90',
-  attDate: '', leaveFilter: '全部', showFullPhone: '', cmpA: '', cmpB: ''
+  attDate: '', leaveFilter: '全部', showFullPhone: '', cmpA: '', cmpB: '', studentSort: { key: '', dir: 1 }
 };
 const MODULE_RENDER = {
   dashboard: renderDashboard,
@@ -1789,6 +1849,15 @@ const ACTIONS = {
   addStudent: function () { studentFormModal(); },
   editStudent: function (el) { const st = getStudent(el.dataset.id); if (st) studentFormModal(st); },
   saveStudent: function (el) { saveStudent(el.dataset.id); },
+  sortStudents: function (el) {
+    const k = el.dataset.key;
+    const ss = state.studentSort = state.studentSort || { key: '', dir: 1 };
+    if (ss.key === k) ss.dir = -ss.dir; else { ss.key = k; ss.dir = 1; }
+    render();
+  },
+  exportRangeOpen: function () { exportRangeOpen(); },
+  exportRangeCsv: function () { exportRangeCsv(); },
+  exportRangeJson: function () { exportRangeJson(); },
   delStudent: function (el) {
     const st = getStudent(el.dataset.id);
     confirmBox({ title: '删除学生', message: '确定删除学生「' + (st ? st.name : '') + '」吗？相关成绩、考勤等记录将一并删除。', danger: true, okText: '删除', onOk: function () {
