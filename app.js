@@ -1,5 +1,5 @@
 /* 构建版本 */
-const APP_VERSION = '20260817-152837';
+const APP_VERSION = '20260817-153343';
 /* ================= 数据层 ================= */
 const STORAGE_KEY = 'banzhuren_workbench_v1';
 const DB_VERSION = 1;
@@ -2181,13 +2181,15 @@ function analysisDetailModal(type) {
 /* ---------- 班级成员成绩（全班成绩总表） ---------- */
 function gradeClassScoresHtml() {
   const d = DB.data;
-  const exams = d.exams.filter(e => d.scores.some(s => s.examId === e.id)).sort((a, b) => a.date > b.date ? 1 : -1);
-  if (!exams.length) return '<div class="card">' + emptyHtml('暂无成绩数据，请先录入成绩', '📝') + '</div>';
+  /* 与成绩录入共用同一份考试列表（含暂无成绩的考试），保证同步 */
+  const exams = d.exams.slice().sort((a, b) => a.date > b.date ? 1 : -1);
+  if (!exams.length) return '<div class="card">' + emptyHtml('暂无考试，请先在成绩录入中新建', '📝') + '</div>';
   const selId = state.classExamId && exams.find(e => e.id === state.classExamId) ? state.classExamId : exams[exams.length - 1].id;
   const exam = exams.find(e => e.id === selId);
   const ordered = orderedSubjects(exam);
   const byStu = {};
   d.scores.filter(s => s.examId === selId).forEach(s => { byStu[s.studentId] = s; });
+  const hasScores = d.scores.some(s => s.examId === selId);
   const q = (state.classStuQuery || '').toLowerCase();
   const ss = state.classSort || {};
   let stu = currentStudents().filter(s => !q || s.name.toLowerCase().indexOf(q) >= 0 || String(s.no).indexOf(q) >= 0);
@@ -2243,6 +2245,7 @@ function gradeClassScoresHtml() {
     '<button class="btn small outline" data-action="exportExamCsv" data-id="' + selId + '">导出 CSV</button>' +
     (lastDeletedSubject && lastDeletedSubject.examId === selId ? '<button class="btn small outline" data-action="undoDeleteSubject">↩ 回退删除科目</button>' : '') +
     '<span class="hint" style="font-size:12px;color:var(--text3)">点表头可排序；＋ 加科目，－ 删科目（可回退）</span>' +
+    (!hasScores ? '<div class="hint" style="font-size:12px;color:var(--warn);width:100%">本考试暂无成绩，请先到「成绩录入」录入后即可显示。</div>' : '') +
     '</div>' +
     '<div class="table-wrap" style="max-height:66vh;overflow:auto"><table class="tbl ta-center"><thead>' + head + '</thead><tbody>' + (rows || '<tr><td colspan="' + colCount + '">' + emptyHtml('未找到学生') + '</td></tr>') + '</tbody></table></div></div>';
 }
