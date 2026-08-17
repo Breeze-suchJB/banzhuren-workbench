@@ -952,17 +952,23 @@ function renderDataMgr() {
     field('summerEnd', '暑假结束', d.settings.summerEnd, 'date') +
     '<div class="field"><label>主题配色</label><select data-field="theme">' + themeOpts + '</select></div>' +
     '<div class="field"><label>评语权重（教师占比 %）</label><input type="number" data-field="commentTeacherWeight" min="0" max="100" value="' + Math.round((d.settings.commentTeacherWeight || 0.7) * 100) + '"></div>' +
-    '<div class="field"><label>尖子生 划线方式</label><select data-field="topMode"><option value="pct"' + (d.settings.topMode !== 'score' ? ' selected' : '') + '>按百分位</option><option value="score"' + (d.settings.topMode === 'score' ? ' selected' : '') + '>按具体分数</option></select></div>' +
-    '<div class="field"><label>尖子生 百分位 %</label><input type="number" data-field="topPercent" min="1" max="50" value="' + esc(d.settings.topPercent) + '"></div>' +
-    '<div class="field"><label>尖子生 分数线（≥此分）</label><input type="number" data-field="topScore" min="0" max="9999" value="' + esc(d.settings.topScore || 0) + '"></div>' +
-    '<div class="field"><label>临界生 划线方式</label><select data-field="criticalMode"><option value="pct"' + (d.settings.criticalMode !== 'score' ? ' selected' : '') + '>按百分位</option><option value="score"' + (d.settings.criticalMode === 'score' ? ' selected' : '') + '>按具体分数</option></select></div>' +
-    '<div class="field"><label>临界生 百分位 %</label><input type="number" data-field="criticalPercent" min="1" max="90" value="' + esc(d.settings.criticalPercent) + '"></div>' +
-    '<div class="field"><label>临界生 分数线低线（≥）</label><input type="number" data-field="criticalScore" min="0" max="9999" value="' + esc(d.settings.criticalScore || 0) + '"></div>' +
-    '<div class="field"><label>临界生 分数线上限（&lt;，可选）</label><input type="number" data-field="criticalScoreHigh" min="0" max="9999" value="' + esc(d.settings.criticalScoreHigh || 0) + '"></div>' +
-    '<div class="field"><label>不及格生 划线方式</label><select data-field="failMode"><option value="pct"' + (d.settings.failMode !== 'score' ? ' selected' : '') + '>按百分位</option><option value="score"' + (d.settings.failMode === 'score' ? ' selected' : '') + '>按具体分数</option></select></div>' +
-    '<div class="field"><label>不及格生 百分位（后 %）</label><input type="number" data-field="failPercent" min="1" max="90" value="' + esc(d.settings.failPercent) + '"></div>' +
-    '<div class="field"><label>不及格生 分数线（&lt;此分）</label><input type="number" data-field="failScore" min="0" max="9999" value="' + esc(d.settings.failScore || 0) + '"></div>' +
-    '<div class="field full" style="font-size:12px;color:var(--text3)">划线方式选“按百分位”时使用各百分位；选“按具体分数”时使用分数线（例：尖子生≥720，临界生 650~700，不及格生&lt;500）。</div>' +
+    '<div class="field full tier-group"><label>🎯 尖子生</label><div class="tier-line">' +
+    '<select data-field="topMode"><option value="pct"' + (d.settings.topMode !== 'score' ? ' selected' : '') + '>按百分位</option><option value="score"' + (d.settings.topMode === 'score' ? ' selected' : '') + '>按具体分数</option></select>' +
+    '<span class="tier-k">百分位 %</span><input type="number" data-field="topPercent" min="1" max="50" value="' + esc(d.settings.topPercent) + '">' +
+    '<span class="tier-k">分数线 ≥</span><input type="number" data-field="topScore" min="0" max="9999" value="' + esc(d.settings.topScore || 0) + '">' +
+    '</div></div>' +
+    '<div class="field full tier-group"><label>🔍 临界生</label><div class="tier-line">' +
+    '<select data-field="criticalMode"><option value="pct"' + (d.settings.criticalMode !== 'score' ? ' selected' : '') + '>按百分位</option><option value="score"' + (d.settings.criticalMode === 'score' ? ' selected' : '') + '>按具体分数</option></select>' +
+    '<span class="tier-k">百分位 %</span><input type="number" data-field="criticalPercent" min="1" max="90" value="' + esc(d.settings.criticalPercent) + '">' +
+    '<span class="tier-k">低线 ≥</span><input type="number" data-field="criticalScore" min="0" max="9999" value="' + esc(d.settings.criticalScore || 0) + '">' +
+    '<span class="tier-k">上限 &lt;</span><input type="number" data-field="criticalScoreHigh" min="0" max="9999" value="' + esc(d.settings.criticalScoreHigh || 0) + '">' +
+    '</div></div>' +
+    '<div class="field full tier-group"><label>⚠️ 不及格生</label><div class="tier-line">' +
+    '<select data-field="failMode"><option value="pct"' + (d.settings.failMode !== 'score' ? ' selected' : '') + '>按百分位</option><option value="score"' + (d.settings.failMode === 'score' ? ' selected' : '') + '>按具体分数</option></select>' +
+    '<span class="tier-k">百分位（后）%</span><input type="number" data-field="failPercent" min="1" max="90" value="' + esc(d.settings.failPercent) + '">' +
+    '<span class="tier-k">分数线 &lt;</span><input type="number" data-field="failScore" min="0" max="9999" value="' + esc(d.settings.failScore || 0) + '">' +
+    '</div></div>' +
+    '<div class="field full" style="font-size:12px;color:var(--text3)">划线方式选“按百分位”时使用百分位；选“按具体分数”时使用分数线（例：尖子生≥720，临界生 650~700，不及格生&lt;500）。</div>' +
     field('tagLibrary', '学生标签库（逗号分隔）', d.settings.tagLibrary.join(','), 'text', 'full') +
     field('subjectColors', '科目配色（每行一条"科目,颜色"）', subjectRows, 'textarea', 'full') +
     '<div class="field"><label class="hint" style="font-size:13px"><input type="checkbox" data-field="maskPhone" ' + (d.settings.maskPhone ? 'checked' : '') + '> 手机号脱敏</label></div>' +
