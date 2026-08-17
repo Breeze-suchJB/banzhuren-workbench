@@ -1890,6 +1890,7 @@ const ACTIONS = {
   scheduleSubjectSettings: function () { scheduleSubjectSettingsModal(); },
   saveScheduleSubjects: function () { saveScheduleSubjects(); },
   syncScheduleTeachers: function () { syncScheduleTeachers(); },
+  refreshDutyRoster: function () { refreshDutyRoster(); },
   classAddSubject: function (el) { classAddSubject(el.dataset.id); },
   saveClassAddSubject: function (el) { saveClassAddSubject(el.dataset.id); },
   classRemoveSubject: function (el) { classRemoveSubject(el.dataset.id, el.dataset.subject); },

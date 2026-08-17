@@ -1,5 +1,5 @@
 /* 构建版本 */
-const APP_VERSION = '20260817-150247';
+const APP_VERSION = '20260817-150614';
 /* ================= 数据层 ================= */
 const STORAGE_KEY = 'banzhuren_workbench_v1';
 const DB_VERSION = 1;
@@ -2462,7 +2462,7 @@ function affDutyHtml() {
     '<tr><td style="font-weight:600">教室值日</td>' + rdCols + '</tr>' +
     '</tbody></table></div>' +
     '<div class="btn-row" style="margin-top:12px;flex-wrap:wrap">' +
-    '<button class="btn small primary" data-action="editDuty">编辑值日表</button>' +
+    '<button class="btn small primary" data-action="editDuty">编辑值日表</button><button class="btn small outline" data-action="refreshDutyRoster">🔄 自动刷新名单</button>' +
     '<button class="btn small primary" data-action="rotateDuty">🔁 一键轮换（整组顺延一天）</button>' +
     '<button class="btn small primary" data-action="autoRoomDuty">✨ 一键生成教室值日（避开当日小组）</button>' +
     '</div>' +
@@ -2541,7 +2541,7 @@ function dutyFormModal() {
     '</div>',
     { title: '编辑值日表' }
   );
-  const foot = modalFootHtml('<button class="btn primary" data-action="saveDuty">保存</button>');
+  const foot = modalFootHtml('<button class="btn outline" data-action="refreshDutyRoster">🔄 自动刷新名单</button><button class="btn primary" data-action="saveDuty">保存</button>');
   document.getElementById('modalBox').insertAdjacentHTML('beforeend', foot);
 }
 function saveDuty() {
@@ -3046,4 +3046,37 @@ function syncScheduleTeachers() {
   });
   DB.save(); render();
   toast('已按班级角色同步任课教师（课表手动修改的教师保留）· 更新 ' + changed + ' 格');
+}
+
+function refreshDutyRoster() {
+  const d = DB.data;
+  const days = d.duties.days || [];
+  const roster = currentStudents().map(s => s.name);
+  const rosterSet = new Set(roster);
+  let removed = 0, added = 0;
+  /* 1) 移除已不在名单的名字 */
+  days.forEach(function (day) {
+    const before = (day.students || []).length;
+    day.students = (day.students || []).filter(function (n) { return rosterSet.has(n); });
+    removed += before - (day.students || []).length;
+  });
+  /* 2) 把名单中还没安排值日的新学生按天轮流补入 */
+  const assigned = new Set();
+  days.forEach(function (day) { (day.students || []).forEach(function (n) { assigned.add(n); }); });
+  const newcomers = roster.filter(function (n) { return !assigned.has(n); });
+  if (days.length && newcomers.length) {
+    newcomers.forEach(function (n, i) {
+      const day = days[i % days.length];
+      day.students = day.students || [];
+      day.students.push(n);
+      added++;
+    });
+  }
+  /* 3) 教室值日清理无效名字 */
+  const rd = d.duties.roomDuty;
+  if (rd && rd.days) rd.days.forEach(function (x) { if (x.name && !rosterSet.has(x.name)) x.name = ''; });
+  DB.save();
+  const inModal = !!document.querySelector('#modalBox [data-field="week"]');
+  if (inModal) { closeModal(); dutyFormModal(); } else { render(); }
+  toast('已按最新名单刷新值日：新增 ' + added + ' 人，移除 ' + removed + ' 个已删除姓名' + (days.length ? '' : '（暂无数值日安排）'));
 }
