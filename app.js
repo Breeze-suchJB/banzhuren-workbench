@@ -1,5 +1,5 @@
 /* 构建版本 */
-const APP_VERSION = '20260817-155914';
+const APP_VERSION = '20260817-160321';
 /* ================= 数据层 ================= */
 const STORAGE_KEY = 'banzhuren_workbench_v1';
 const NO_DEMO_KEY = 'banzhuren_no_demo';
@@ -508,6 +508,22 @@ function emptyData() {
   return base;
 }
 
+function blankData() {
+  const base = demoData();
+  ['classes', 'students', 'exams', 'scores', 'attendance', 'leaves', 'points', 'violations', 'homeworks',
+   'contacts', 'notices', 'aids', 'todos', 'logs', 'talks', 'meetings', 'resources', 'recites',
+   'countdowns', 'honorsClass', 'honorsTeacher', 'activities', 'departures', 'customHolidays', 'career']
+    .forEach(k => { base[k] = []; });
+  base.fiveEval = {}; base.subjectChoices = {}; base.safety = { physical: [], retention: [], safetyLedger: [], mental: [] }; base.comments = {}; base.lessons = [];
+  base.schedule = { periods: [], grid: {} };
+  base.duties = { week: '', days: [], roomDuty: { days: [] } };
+  base.seat = { rows: 6, cols: 8, stage: 'top', aisles: 1, layout: [] };
+  base.settings = Object.assign({}, defaultSettings());
+  base.settings.currentClassId = '';
+  base.settings.dashboard = { blocks: DASH_DEFAULT_BLOCKS.map(function (b) { return Object.assign({}, b); }) };
+  return base;
+}
+
 /* ================= 存储与迁移 ================= */
 const DB = {
   data: null,
@@ -569,6 +585,17 @@ const DB = {
   resetDemo() {
     this.data = demoData();
     try { localStorage.removeItem(NO_DEMO_KEY); } catch (e) {}
+    this.save();
+  },
+  wipeAll() {
+    /* 一键清空全部数据（班级/设置也清空），并标记不再自动生成演示数据 */
+    try {
+      const keys = [];
+      for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k && (k.indexOf('banzhuren_sync_backup_') === 0 || k.indexOf('banzhuren_sync_backup_remote_') === 0)) keys.push(k); }
+      keys.forEach(k => localStorage.removeItem(k));
+      localStorage.setItem(NO_DEMO_KEY, '1');
+    } catch (e) {}
+    this.data = this.normalize(blankData());
     this.save();
   },
   clearBusinessData() {
