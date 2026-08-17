@@ -2487,11 +2487,12 @@ function exportStudentsCsv(rStart, rEnd) {
   const S = rStart && rEnd ? (rStart <= rEnd ? rStart : rEnd) : '';
   const E = rStart && rEnd ? (rStart <= rEnd ? rEnd : rStart) : '';
   const inR = function (dt) { return !!dt && (!S || (dt >= S && dt <= E)); };
-  const head = ['学号', '姓名', '性别', '住校', '职务', '家庭情况', '家长1姓名', '家长1手机号', '家长2姓名', '家长2手机号', '监护人', '入学日期', '小组编号', '综合成绩', '排名', '积分', '预警标签', '标签'];
+  const head = ['学号', '姓名', '性别', '住校', '职务', '家庭情况', '家长1姓名', '家长1关系', '家长1手机号', '家长2姓名', '家长2关系', '家长2手机号', '监护人', '入学日期', '小组编号', '综合成绩', '排名', '积分', '预警标签', '标签'];
   if (S) { head.push('期内出勤', '期内迟到', '期内缺勤', '期内请假', '期内积分', '期内违纪', '期内沟通', '时间段'); }
   const rows = [head];
   currentStudents().forEach(s => {
-    const base = [s.no, s.name, s.gender, s.boarding ? '是' : '否', s.position || '', s.family || '', s.parentName || '', s.phone1 || s.phone || '', s.parent2Name || '', s.phone2 || '', s.guardian || '', s.admitDate || '', s.groupId || '', s.totalScore || '', s.classRank || '', s.score || 0, (s.warningTags || []).join('/'), (s.tags || []).join('/')];
+    const r1 = s.parent1Relation || s.guardian || '父亲';
+    const base = [s.no, s.name, s.gender, s.boarding ? '是' : '否', s.position || '', s.family || '', s.parentName || '', r1, s.phone1 || s.phone || '', s.parent2Name || '', s.parent2Relation || '其他', s.phone2 || '', r1, s.admitDate || '', s.groupId || '', s.totalScore || '', s.classRank || '', s.score || 0, (s.warningTags || []).join('/'), (s.tags || []).join('/')];
     if (S) {
       const att = d.attendance.filter(a => a.studentId === s.id && inR(a.date));
       const pts = d.points.filter(p => p.studentId === s.id && inR(p.date));
@@ -2534,14 +2535,15 @@ function handleImportCsv(input) {
         const no = r[idx(['学号'], 0)] || String(d.students.filter(s => s.classId === cc.id).length + 1);
         const p1 = r[idx(['家长1手机号', '手机号'], 3)] || '';
         const p2 = r[idx(['家长2手机号'], 99)] || '';
+        const rel1 = r[idx(['家长1关系', '监护人'], 7)] || '父亲';
         d.students.push({
           id: uid('s'), classId: cc ? cc.id : (d.classes[0] || {}).id,
           name: String(name).trim(), no: String(no).trim(),
           gender: r[idx(['性别'], 2)] === '女' ? '女' : '男',
-          phone1: p1, phone: p1, parent2Name: r[idx(['家长2姓名'], 99)] || '', phone2: p2,
+          phone1: p1, phone: p1, parent2Name: r[idx(['家长2姓名'], 99)] || '', phone2: p2, parent1Relation: rel1, parent2Relation: r[idx(['家长2关系'], 99)] || '其他',
           boarding: /是|住/.test(r[idx(['住校'], 4)] || ''),
           position: r[idx(['职务'], 5)] || '', family: r[idx(['家庭情况'], 6)] || '正常',
-          parentName: r[idx(['家长1姓名', '家长姓名'], 7)] || '', guardian: r[idx(['监护人'], 8)] || '',
+          parentName: r[idx(['家长1姓名', '家长姓名'], 7)] || '', guardian: rel1,
           admitDate: r[idx(['入学日期'], 9)] || '2025-09-01', groupId: parseInt(r[idx(['小组编号'], 10)] || '1', 10) || 1,
           attendanceRate: 1, lateCount: 0, absentCount: 0, totalScore: 0, behaviorScore: 80, classRank: 0, score: 0,
           warningTags: (r[idx(['预警标签'], 14)] || '').split(/[\/]/).map(x => x.trim()).filter(Boolean),

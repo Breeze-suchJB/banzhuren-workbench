@@ -1,5 +1,5 @@
 /* 构建版本 */
-const APP_VERSION = '20260818-012731';
+const APP_VERSION = '20260818-013403';
 /* ================= 数据层 ================= */
 const STORAGE_KEY = 'banzhuren_workbench_v1';
 const NO_DEMO_KEY = 'banzhuren_no_demo';
@@ -167,6 +167,7 @@ function demoData() {
       family: rnd() < 0.3 ? pick(FAMILY.slice(0, 5)) : '正常',
       parentName: pick(SURNAMES) + '家长',
       guardian: gender === '男' ? '父亲' : '母亲',
+      parent1Relation: gender === '男' ? '父亲' : '母亲', parent2Relation: '其他',
       attendanceRate: att,
       lateCount: rndInt(0, 8),
       absentCount: rndInt(0, 3),
@@ -1439,10 +1440,11 @@ function studentFormModal(st) {
     field('position', '职务', st.position || '', 'text') +
     field('family', '家庭情况', st.family || '', 'text') +
     field('parentName', '家长1 姓名', st.parentName || '', 'text') +
+    '<div class="field"><label>家长1 关系</label><select data-field="parent1Relation">' + optionsHtml(['父亲', '母亲', '其他'], st.parent1Relation || st.guardian || '父亲') + '</select></div>' +
     field('phone1', '家长1 手机号', st.phone1 || st.phone || '', 'text') +
     field('parent2Name', '家长2 姓名', st.parent2Name || '', 'text') +
+    '<div class="field"><label>家长2 关系</label><select data-field="parent2Relation">' + optionsHtml(['父亲', '母亲', '其他'], st.parent2Relation || '其他') + '</select></div>' +
     field('phone2', '家长2 手机号', st.phone2 || '', 'text') +
-    field('guardian', '监护人', st.guardian || '', 'text') +
     field('groupId', '小组编号', st.groupId || 1, 'number', 'min="1"') +
     field('admitDate', '入学日期', st.admitDate || '', 'date') +
     '<div class="field full"><label>标签（点击选择）</label><div class="chip-row" data-chipgroup="tags">' + (tagChips || '<span class="hint">暂无标签库，可在系统设置中添加</span>') + '</div></div>' +
@@ -1466,7 +1468,7 @@ function saveStudent(id) {
   const payload = {
     name: v.name, no: v.no, gender: v.gender, phone1: v.phone1 || v.phone || '', phone: v.phone1 || v.phone || '', parent2Name: v.parent2Name || '', phone2: v.phone2 || '',
     boarding: v.boarding === '是', position: v.position, family: v.family,
-    parentName: v.parentName, guardian: v.guardian, groupId: parseInt(v.groupId || '1', 10) || 1,
+    parentName: v.parentName, guardian: v.parent1Relation || '父亲', parent1Relation: v.parent1Relation || '父亲', parent2Relation: v.parent2Relation || '其他', groupId: parseInt(v.groupId || '1', 10) || 1,
     admitDate: v.admitDate, tags: tags, warningTags: warns
   };
   if (id) {
@@ -1511,7 +1513,7 @@ function openStudentDrawer(id) {
       '<div><div style="font-size:19px;font-weight:800">' + esc(st.name) + ' <span style="font-size:12px;color:var(--text3);font-weight:400">' + esc(st.no) + '</span></div>' +
       '<div style="font-size:12.5px;color:var(--text2);margin-top:2px">' + esc(st.gender) + ' · ' + (st.boarding ? '住校' : '走读') + ' · 第' + (st.groupId || 1) + '组</div></div></div>' +
     '<div class="drawer-section"><div class="ds-title">基本信息</div><div class="kv-list">' +
-      '<div class="kv"><b>家长1</b><span>' + esc(st.parentName || '—') + ' · ' + esc(maskPhone(st.phone1 || st.phone || '')) + '</span></div><div class="kv"><b>家长2</b><span>' + esc((st.parent2Name || '—') + (st.phone2 ? ' · ' + maskPhone(st.phone2) : '')) + '</span></div>' +
+      '<div class="kv"><b>家长1</b><span>' + esc((st.parent1Relation || st.guardian || '家长') + '：' + (st.parentName || '—')) + ' · ' + esc(maskPhone(st.phone1 || st.phone || '')) + '</span></div><div class="kv"><b>家长2</b><span>' + esc((st.parent2Relation || '家长') + '：' + (st.parent2Name || '—')) + (st.phone2 ? ' · ' + esc(maskPhone(st.phone2)) : '') + '</span></div>' +
       '<div class="kv"><b>监护人</b><span>' + esc(st.guardian || '—') + '</span></div><div class="kv"><b>家庭情况</b><span>' + esc(st.family || '正常') + '</span></div>' +
       '<div class="kv"><b>职务</b><span>' + esc(st.position || '—') + '</span></div><div class="kv"><b>入学日期</b><span>' + esc(st.admitDate || '—') + '</span></div>' +
       '<div class="kv"><b>考勤率</b><span>' + Math.round((st.attendanceRate || 0) * 100) + '%</span></div><div class="kv"><b>综合成绩</b><span>' + total + ' 分 · 第 ' + (st.classRank || '—') + ' 名</span></div>' +
