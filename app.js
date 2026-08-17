@@ -1,5 +1,5 @@
 /* 构建版本 */
-const APP_VERSION = '20260817-122229';
+const APP_VERSION = '20260817-130229';
 /* ================= 数据层 ================= */
 const STORAGE_KEY = 'banzhuren_workbench_v1';
 const DB_VERSION = 1;
@@ -81,6 +81,7 @@ function defaultSettings() {
     criticalPercent: 40,
     maskPhone: true,
     showClock: true,
+    dashboard: { blocks: DASH_DEFAULT_BLOCKS.map(function (b) { return Object.assign({}, b); }) },
     tagLibrary: ['学困生', '心理重点关注', '留守儿童', '单亲家庭', '低保家庭', '脱贫户', '贫困学生', '体弱多病', '进步之星', '纪律之星'],
     subjectColors: {
       '语文': '#EF4444', '数学': '#3B82F6', '英语': '#8B5CF6', '物理': '#F59E0B',
@@ -96,6 +97,16 @@ const GIVEN = ['梓涵','子轩','雨桐','浩然','欣怡','一诺','俊杰','�
 const POSITIONS = ['班长', '学习委员', '纪律委员', '卫生委员', '体育委员', '文艺委员', '心理委员', '电教员', '', '', '', ''];
 const FAMILY = ['留守学生', '单亲家庭', '低保家庭', '脱贫户', '贫困学生', '正常'];
 const WARNINGS = ['学困生', '心理重点关注', '近期成绩下滑', '经常迟到', '家庭变故'];
+const DASH_DEFAULT_BLOCKS = [
+  { id: 'stats', enabled: true, w: 'full' },
+  { id: 'alerts', enabled: true, w: 'full' },
+  { id: 'quick', enabled: true, w: 'full' },
+  { id: 'todo', enabled: true, w: 'half' },
+  { id: 'course', enabled: true, w: 'half' },
+  { id: 'points', enabled: true, w: 'half' },
+  { id: 'countdown', enabled: true, w: 'half' },
+  { id: 'notices', enabled: true, w: 'full' }
+];
 
 function genNames(n) {
   const names = [];
@@ -492,14 +503,13 @@ const DB = {
     try { raw = localStorage.getItem(STORAGE_KEY); } catch (e) { raw = null; }
     if (raw) {
       try {
-        const parsed = JSON.parse(raw);
-        this.data = this.normalize(parsed);
+        this.data = this.normalize(JSON.parse(raw));
       } catch (e) {
         console.warn('本地数据损坏，重新生成演示数据');
-        this.data = demoData();
+        this.data = this.normalize(demoData());
       }
     } else {
-      this.data = demoData();
+      this.data = this.normalize(demoData());
     }
     this.save();
   },
@@ -516,6 +526,17 @@ const DB = {
     if (!out.schedule || !out.schedule.grid) out.schedule = { periods: [], grid: {} };
     if (!out.schedule.periods) out.schedule.periods = [];
     if (!out.schedule.grid) out.schedule.grid = {};
+    const baseSubj = Object.keys(out.settings.subjectColors || {});
+    const defSubj = baseSubj.length ? baseSubj.slice() : ['语文', '数学', '英语', '物理', '化学', '生物', '政治', '历史', '地理'];
+    if (!out.settings.gradeSubjects || !out.settings.gradeSubjects.length) out.settings.gradeSubjects = defSubj.slice();
+    if (!out.schedule.subjects || !out.schedule.subjects.length) out.schedule.subjects = defSubj.slice();
+    if (!out.settings.dashboard || !out.settings.dashboard.blocks || !out.settings.dashboard.blocks.length) {
+      out.settings.dashboard = { blocks: DASH_DEFAULT_BLOCKS.map(function (b) { return Object.assign({}, b); }) };
+    } else {
+      const dashIds = {};
+      out.settings.dashboard.blocks.forEach(function (b) { dashIds[b.id] = b; });
+      DASH_DEFAULT_BLOCKS.forEach(function (b) { if (!dashIds[b.id]) out.settings.dashboard.blocks.push(Object.assign({}, b)); });
+    }
     if (!out.duties || !out.duties.days) out.duties = { week: '第1周', days: [] };
     if (!out.duties.roomDuty || !out.duties.roomDuty.days) out.duties.roomDuty = { days: (out.duties.days || []).map(x => ({ day: x.day || '', name: '' })) };
     if (typeof out.duties.roomDuty.cursor !== 'number') out.duties.roomDuty.cursor = 0;
@@ -1055,6 +1076,9 @@ const NAV_GROUPS = [
   { name: '系统', items: [
     { id: 'datamgr', label: '数据管理', ico: '💾' },
     { id: 'profile', label: '个人资料修改', ico: '👤' }
+  ]},
+  { name: '个性化', items: [
+    { id: 'settings', label: '仪表盘设置', ico: '⚙️' }
   ]}
 ];
 /* ================= 模块：仪表盘 ================= */
@@ -1176,21 +1200,35 @@ function renderDashboard() {
 
   const retire = s.retireDate ? daysBetween(today, s.retireDate) : null;
 
-  return '' +
-    '<div class="greet-row"><div class="greet">' + esc(s.teacherName) + '好，今天也要努力哟 💪<small>' + esc(today) + ' · ' + esc(cc ? cc.name : '') + '</small></div>' +
+  const DASH_BLOCK_CARDS = {
+    stats: ['📊 数据总览', ''],
+    alerts: ['🚨 红线预警', ''],
+    quick: ['⚡ 快捷操作', ''],
+    todo: ['📌 今日待办', '<span class="ct-sub">点击圆圈勾选完成</span><button class="btn ghost small" data-action="dashJump" data-mod="work" data-tab="todo" style="margin-left:auto">查看全部 ›</button>'],
+    course: ['📖 今日课程', '<span class="ct-sub">自习与班会课标记本人任教</span><button class="btn ghost small" data-action="dashJump" data-mod="affairs" data-tab="schedule" style="margin-left:auto">查看详情 ›</button>'],
+    points: ['🏆 量化积分前五名', '<button class="btn ghost small" data-action="dashJump" data-mod="affairs" data-tab="point" style="margin-left:auto">查看详情 ›</button>'],
+    countdown: ['⏳ 重要事项倒计时', '<button class="btn ghost small" data-action="dashJump" data-mod="calendar" style="margin-left:auto">查看详情 ›</button>'],
+    notices: ['📢 最新通知', '<button class="btn ghost small" data-action="dashJump" data-mod="contact" data-tab="notice" style="margin-left:auto">查看详情 ›</button>']
+  };
+  const DASH_BLOCK_HTML = {
+    stats: '<div class="stat-grid">' + stat + '</div>',
+    alerts: alertHtml,
+    quick: '<div class="quick-grid">' + quicks + '</div>',
+    todo: todoHtml,
+    course: courseHtml,
+    points: podium,
+    countdown: '<div class="countdown-list">' + cdHtml + '</div>',
+    notices: noticeHtml
+  };
+  const dashBlocks = (s.dashboard && s.dashboard.blocks && s.dashboard.blocks.length) ? s.dashboard.blocks : DASH_DEFAULT_BLOCKS;
+  const dashHtml = dashBlocks.filter(function (b) { return b.enabled !== false; }).map(function (b) {
+    const card = DASH_BLOCK_CARDS[b.id];
+    if (!card) return '';
+    return '<div class="dash-card ' + (b.w === 'half' ? 'half' : '') + '"><div class="card"><div class="card-title">' + card[0] + card[1] + '</div>' + (DASH_BLOCK_HTML[b.id] || '') + '</div></div>';
+  }).join('');
+  return '<div class="greet-row"><div class="greet">' + esc(s.teacherName) + '好，今天也要努力哟 💪<small>' + esc(today) + ' · ' + esc(cc ? cc.name : '') + '</small></div>' +
     (retire != null ? '<span class="badge amber" title="距离退休">🕰️ 距离退休还有 ' + retire + ' 天</span>' : '') + '</div>' +
-    '<div class="stat-grid">' + stat + '</div>' +
-    '<div class="card"><div class="card-title">🚨 红线预警</div>' + alertHtml + '</div>' +
-    '<div class="card"><div class="card-title">⚡ 快捷操作</div><div class="quick-grid">' + quicks + '</div></div>' +
-    '<div class="grid-2">' +
-      '<div class="card"><div class="card-title">📌 今日待办<span class="ct-sub">点击圆圈勾选完成</span><button class="btn ghost small" data-action="quick" data-mod="work" data-p="todo" style="margin-left:auto">查看全部 ›</button></div>' + todoHtml + '</div>' +
-      '<div class="card"><div class="card-title">📖 今日课程<span class="ct-sub">自习与班会课标记本人任教</span></div>' + courseHtml + '</div>' +
-    '</div>' +
-    '<div class="grid-2">' +
-      '<div class="card"><div class="card-title">🏆 量化积分前五名</div>' + podium + '</div>' +
-      '<div class="card"><div class="card-title">⏳ 重要事项倒计时</div><div class="countdown-list">' + cdHtml + '</div></div>' +
-    '</div>' +
-    '<div class="card"><div class="card-title">📢 最新通知</div>' + noticeHtml + '</div>';
+    '<div class="dash-grid">' + dashHtml + '</div>';
 }
 
 /* ================= 模块：班级管理 ================= */
@@ -1305,6 +1343,32 @@ function renderStudents() {
     '<div class="table-wrap"><table class="tbl"><thead><tr><th>学生</th><th>性别 / 住走</th>' + th('attendanceRate', '考勤率') + th('totalScore', '成绩') + th('classRank', '排名') + th('score', '积分') + '<th>预警</th><th>标签</th><th>操作</th></tr></thead><tbody>' + (rows || '<tr><td colspan="9">' + emptyHtml('未找到学生', '🔍') + '</td></tr>') + '</tbody></table></div>';
 }
 
+function studentFormModal(st) {
+  st = st || {};
+  const d = DB.data;
+  const tagChips = (d.settings.tagLibrary || []).map(tg => '<span class="chip ' + ((st.tags || []).indexOf(tg) >= 0 ? 'on' : '') + '" data-chip="' + esc(tg) + '">' + esc(tg) + '</span>').join('');
+  const warnChips = (typeof WARNINGS !== 'undefined' ? WARNINGS : []).map(w => '<span class="chip ' + ((st.warningTags || []).indexOf(w) >= 0 ? 'on' : '') + '" data-chip="' + esc(w) + '">' + esc(w) + '</span>').join('');
+  openModal(
+    '<div class="form-grid">' +
+    field('name', '姓名 *', st.name || '', 'text') +
+    field('no', '学号', st.no || '', 'text') +
+    field('gender', '性别', st.gender || '男', 'select', '', optionsHtml(['男', '女'], st.gender)) +
+    field('boarding', '住走', st.boarding ? '是' : '否', 'select', '', optionsHtml(['是', '否'], st.boarding ? '是' : '否')) +
+    field('phone', '手机号', st.phone || '', 'text') +
+    field('position', '职务', st.position || '', 'text') +
+    field('family', '家庭情况', st.family || '', 'text') +
+    field('parentName', '家长姓名', st.parentName || '', 'text') +
+    field('guardian', '监护人', st.guardian || '', 'text') +
+    field('groupId', '小组编号', st.groupId || 1, 'number', 'min="1"') +
+    field('admitDate', '入学日期', st.admitDate || '', 'date') +
+    '<div class="field full"><label>标签（点击选择）</label><div class="chip-row" data-chipgroup="tags">' + (tagChips || '<span class="hint">暂无标签库，可在系统设置中添加</span>') + '</div></div>' +
+    '<div class="field full"><label>预警标签（点击选择）</label><div class="chip-row" data-chipgroup="warns">' + warnChips + '</div></div>' +
+    '</div>',
+    { title: st.id ? '编辑学生' : '新增学生' }
+  );
+  const foot = modalFootHtml('<button class="btn primary" data-action="saveStudent" data-id="' + (st.id || '') + '">保存</button>');
+  document.getElementById('modalBox').insertAdjacentHTML('beforeend', foot);
+}
 function saveStudent(id) {
   const v = readFields();
   if (!v.name) { toast('请填写姓名', 'err'); return; }
@@ -1368,13 +1432,62 @@ function openStudentDrawer(id) {
   openDrawer('学生档案 · ' + st.name, html, '<button class="btn" data-action="closeDrawer">关闭</button><button class="btn primary" data-action="editStudent" data-id="' + st.id + '">编辑资料</button>');
 }
 
+
+
+/* ================= 模块：仪表盘设置 ================= */
+function renderSettings() {
+  const d = DB.data;
+  const blocks = (d.settings.dashboard && d.settings.dashboard.blocks && d.settings.dashboard.blocks.length) ? d.settings.dashboard.blocks : DASH_DEFAULT_BLOCKS;
+  const names = { stats: '📊 数据总览', alerts: '🚨 红线预警', quick: '⚡ 快捷操作', todo: '📌 今日待办', course: '📖 今日课程', points: '🏆 量化积分前五名', countdown: '⏳ 重要事项倒计时', notices: '📢 最新通知' };
+  const rows = blocks.map(function (b) {
+    return '<div class="dash-block-row" draggable="true" data-id="' + b.id + '">' +
+      '<span class="db-drag" title="拖动排序">⠿</span>' +
+      '<span class="db-name">' + (names[b.id] || b.id) + '</span>' +
+      '<label class="db-toggle"><input type="checkbox" class="dash-enable" data-id="' + b.id + '"' + (b.enabled !== false ? ' checked' : '') + '> 显示</label>' +
+      '<select class="dash-width" data-id="' + b.id + '"><option value="full"' + (b.w !== 'half' ? ' selected' : '') + '>全宽</option><option value="half"' + (b.w === 'half' ? ' selected' : '') + '>半宽</option></select>' +
+      '<button class="btn btn-ico" data-action="dashBlockMove" data-id="' + b.id + '" data-dir="up" title="上移">↑</button>' +
+      '<button class="btn btn-ico" data-action="dashBlockMove" data-id="' + b.id + '" data-dir="down" title="下移">↓</button>' +
+      '</div>';
+  }).join('');
+  return '<div class="page-title">⚙️ 仪表盘设置</div><div class="page-sub">自定义仪表盘显示的板块、顺序与宽度（可拖动，或用上下按钮）</div>' +
+    '<div class="card"><div class="card-title">仪表盘板块</div>' +
+    '<div class="dash-block-list">' + rows + '</div>' +
+    '<div class="btn-row" style="margin-top:14px"><button class="btn primary" data-action="saveDashSettings">💾 保存设置</button><button class="btn outline" data-action="jumpDash">返回仪表盘预览</button></div>' +
+    '<div style="margin-top:10px;font-size:12px;color:var(--text3)">半宽板块会在同一行并排显示两个；全宽板块占一整行。修改后点“保存设置”生效。</div></div>';
+}
+function saveDashSettings() {
+  const d = DB.data;
+  const blocks = [];
+  document.querySelectorAll('.dash-block-row').forEach(function (row) {
+    const id = row.getAttribute('data-id');
+    const en = row.querySelector('.dash-enable');
+    const w = row.querySelector('.dash-width');
+    blocks.push({ id: id, enabled: en ? en.checked : true, w: w ? w.value : 'full' });
+  });
+  d.settings.dashboard = { blocks: blocks };
+  DB.save();
+  toast('仪表盘设置已保存');
+  render();
+}
+function moveDashBlock(fromId, toId) {
+  const d = DB.data;
+  const arr = d.settings.dashboard.blocks;
+  const i = arr.findIndex(x => x.id === fromId);
+  const j = arr.findIndex(x => x.id === toId);
+  if (i < 0 || j < 0 || i === j) return;
+  const it = arr.splice(i, 1)[0];
+  arr.splice(j, 0, it);
+  DB.save();
+  render();
+}
 /* ================= 模块：成绩管理 ================= */
+let scoreDraft = {};  /* 录入成绩草稿（切换科目增删时保留） */
 function renderGrades() {
   const tab = state.gradeTab || 'entry';
   const tabs = [
-    ['entry', '成绩录入'], ['compare', '成绩对比'], ['personal', '个人成绩'], ['analysis', '学情分析']
+    ['entry', '成绩录入'], ['compare', '成绩对比'], ['personal', '个人成绩'], ['analysis', '学情分析'], ['class', '班级成员成绩']
   ].map(t => '<button class="tab' + (tab === t[0] ? ' active' : '') + '" data-action="gradeTab" data-tab="' + t[0] + '">' + t[1] + '</button>').join('');
-  const body = tab === 'entry' ? gradeEntryHtml() : tab === 'compare' ? gradeCompareHtml() : tab === 'personal' ? gradePersonalHtml() : gradeAnalysisHtml();
+  const body = tab === 'entry' ? gradeEntryHtml() : tab === 'compare' ? gradeCompareHtml() : tab === 'personal' ? gradePersonalHtml() : tab === 'class' ? gradeClassScoresHtml() : gradeAnalysisHtml();
   return '<div class="page-title">📝 成绩管理</div><div class="page-sub">' + esc(currentClass() ? currentClass().name : '') + ' · 录入、对比与分析成绩</div><div class="tabs">' + tabs + '</div>' + body;
 }
 function gradeEntryHtml() {
@@ -1400,7 +1513,7 @@ function examFormModal(exam) {
     field('name', '考试名称 *', exam.name || '', 'text', 'placeholder="如：第一次月考"') +
     field('date', '考试日期', exam.date || todayStr(), 'date') +
     field('subjects', '科目（逗号分隔，可写“科目:满分”如 语文:120,数学:120）', subj || (function () {
-      const ks = Object.keys(DB.data.settings.subjectColors || {});
+      const ks = (DB.data.settings.gradeSubjects && DB.data.settings.gradeSubjects.length) ? DB.data.settings.gradeSubjects : Object.keys(DB.data.settings.subjectColors || {});
       if (!ks.length) return '语文:120,数学:120,英语:120,物理,化学,生物,政治,历史,地理';
       return ks.map(function (n) { return (n === '语文' || n === '数学' || n === '英语') ? n + ':120' : n; }).join(',');
     })() || '', 'text', 'full placeholder="如：语文:120,数学:120,英语（默认100分）"') +
@@ -1443,7 +1556,8 @@ function enterScoreModal(examId) {
   const rows = stu.map(s => {
     const sc = existing[s.studentId];
     const inputs = exam.subjects.map(sub => {
-      const val = sc ? ((sc.subjects.find(x => x.name === sub.name) || {}).score || '') : '';
+      const draftVal = (scoreDraft[s.id] && scoreDraft[s.id][sub.name] != null) ? scoreDraft[s.id][sub.name] : null;
+      const val = draftVal != null ? draftVal : (sc ? ((sc.subjects.find(x => x.name === sub.name) || {}).score || '') : '');
       return '<td><input class="score-input' + (val !== '' ? ' done' : '') + '" type="number" min="0" max="' + sub.full + '" data-subject="' + esc(sub.name) + '" value="' + esc(val) + '" placeholder="—"></td>';
     }).join('');
     const total = sc ? sc.total : '';
@@ -1451,8 +1565,9 @@ function enterScoreModal(examId) {
     return '<tr data-sid="' + s.id + '"><td class="stu-nm">' + esc(s.name) + ' <small style="color:var(--text3);font-weight:400">' + esc(s.no) + '</small></td>' + inputs + '<td class="row-total">' + total + '</td><td class="row-rank">' + rank + '</td></tr>';
   }).join('');
   const fullRow = '<div class="full-score-row" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;align-items:flex-end">' +
-    exam.subjects.map(sub => '<div class="field" style="margin:0"><label>' + esc(sub.name) + ' 满分</label><input type="number" class="full-score-input" data-subject="' + esc(sub.name) + '" value="' + sub.full + '" min="1" max="500" style="width:84px"></div>').join('') +
-    '<span class="hint" style="font-size:12px;color:var(--text3);padding-bottom:6px">修改满分后失焦/回车即生效（如初中数学120、高中数学150）</span></div>';
+    exam.subjects.map(sub => '<div class="field" style="margin:0"><label>' + esc(sub.name) + ' 满分 <button type="button" class="btn btn-ico danger" data-action="removeExamSubject" data-id="' + examId + '" data-subject="' + esc(sub.name) + '" title="删除该科目">×</button></label><input type="number" class="full-score-input" data-subject="' + esc(sub.name) + '" value="' + sub.full + '" min="1" max="500" style="width:84px"></div>').join('') +
+    '<div class="field" style="margin:0"><label>＋ 新增科目</label><div style="display:flex;gap:6px"><input id="newSubjName" placeholder="科目名" style="width:90px;border:1px solid var(--border);border-radius:8px;padding:6px 8px"><input id="newSubjFull" type="number" value="100" min="1" max="500" style="width:70px;border:1px solid var(--border);border-radius:8px;padding:6px 8px"><button type="button" class="btn small primary" data-action="addExamSubject" data-id="' + examId + '">添加</button></div></div>' +
+    '<span class="hint" style="font-size:12px;color:var(--text3);padding-bottom:6px">修改满分失焦即生效；可增删科目（如初中数学120、高中数学150）</span></div>';
   openModal(
     '<div style="font-size:13px;color:var(--text2);margin-bottom:10px">' + esc(exam.name) + ' · ' + esc(exam.date) + ' · 填写各科成绩后保存，自动计算总分与班级排名</div>' +
     fullRow + '<div class="table-wrap" style="max-height:62vh;overflow:auto"><table class="enter-table"><thead>' + head + '</thead><tbody>' + rows + '</tbody></table></div>',
@@ -1464,6 +1579,9 @@ function enterScoreModal(examId) {
     inp.addEventListener('input', function () {
       const tr = inp.closest('tr');
       if (!tr) return;
+      const sid = tr.getAttribute('data-sid');
+      const subj = inp.getAttribute('data-subject');
+      if (sid) { scoreDraft[sid] = scoreDraft[sid] || {}; scoreDraft[sid][subj] = inp.value; }
       inp.classList.add('done');
       let sum = 0, has = 0;
       tr.querySelectorAll('.score-input').forEach(function (x) { const v = parseFloat(x.value); if (!isNaN(v)) { sum += v; has++; } });
@@ -1520,6 +1638,7 @@ function saveScores(examId) {
       if (st) { st.totalScore = s.total; st.classRank = s.rank; }
     });
   }
+  scoreDraft = {};
   DB.save(); closeModal(); render();
   toast('成绩已保存，总分与排名已自动计算');
 }
@@ -1561,7 +1680,7 @@ function gradePersonalHtml() {
     const sc = d.scores.find(s => s.examId === e.id && s.studentId === id);
     return '<tr><td>' + esc(e.name) + '</td><td class="center">' + esc(e.date) + '</td><td class="num">' + (sc ? sc.total : '—') + '</td><td class="num">' + (sc ? sc.rank : '—') + '</td><td class="num">' + (sc && e.total ? Math.round((sc.total / e.total) * 1000) / 10 : '—') + '%</td></tr>';
   }).join('');
-  return '<div class="card"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px">' + sel + '<button class="btn small primary" data-action="setPersonalStu">查询</button><button class="btn small outline" data-action="genAnalysis" data-id="' + (st ? st.id : '') + '">生成学情分析</button></div>' +
+  return '<div class="card"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px">' + sel + '<input id="personalSearch" placeholder="🔍 搜索学生…" style="border:1px solid var(--border);border-radius:10px;padding:8px 12px;min-width:150px">' + '<button class="btn small primary" data-action="setPersonalStu">查询</button><button class="btn small outline" data-action="genAnalysis" data-id="' + (st ? st.id : '') + '">生成学情分析</button></div>' +
     '<div class="chart-box">' + chart + '</div>' +
     '<div class="table-wrap" style="margin-top:12px"><table class="tbl"><thead><tr><th>考试</th><th>日期</th><th>总分</th><th>班级排名</th><th>得分率</th></tr></thead><tbody>' + (rows || '<tr><td colspan="5">' + emptyHtml('暂无成绩') + '</td></tr>') + '</tbody></table></div></div>';
 }
@@ -1599,13 +1718,14 @@ function gradeAnalysisHtml() {
     '<div class="dist-legend">' + dist.map(seg => '<span class="lg"><i style="background:' + seg.color + '"></i>' + seg.label + '：' + seg.n + ' 人（' + (cnt ? Math.round(seg.n / cnt * 1000) / 10 : 0) + '%）</span>').join('') + '</div>';
   const nameList = function (arr) { return arr.map(s => '<span class="badge gray" style="margin:2px">' + esc(s.name) + '</span>').join('') || '<span style="color:var(--text3)">暂无</span>'; };
   return '<div class="stat-grid" style="margin-bottom:16px">' +
-    statCard('var(--primary)', '参考人数', cnt, '人') +
+    statCard('var(--primary)', '参考人数', cnt, '人', '', 'analysisDetail', 'ref') +
     statCard('var(--info)', '平均分', avg, '分') +
-    statCard('var(--ok)', '最高分', max, '分') +
-    statCard('var(--danger)', '最低分', min, '分') +
-    statCard('var(--teal)', '及格率', passRate + '%', '及格 ' + pass + ' 人') +
-    statCard('var(--purple)', '优秀率', goodRate + '%', '优秀 ' + good + ' 人') +
+    statCard('var(--ok)', '最高分', max, '分', '', 'analysisDetail', 'max') +
+    statCard('var(--danger)', '最低分', min, '分', '', 'analysisDetail', 'min') +
+    statCard('var(--teal)', '及格率', passRate + '%', '及格 ' + pass + ' 人', '', 'analysisDetail', 'pass') +
+    statCard('var(--purple)', '优秀率', goodRate + '%', '优秀 ' + good + ' 人', '', 'analysisDetail', 'good') +
     '</div>' +
+    '<div class="btn-row" style="margin-bottom:10px;flex-wrap:wrap"><button class="btn small outline" data-action="analysisDetail" data-target="fail">📋 不及格名单</button><button class="btn small outline" data-action="analysisDetail" data-target="top">🎯 尖子生名单</button><button class="btn small outline" data-action="analysisDetail" data-target="crit">🔍 临界生名单</button><button class="btn small outline" data-action="analysisDetail" data-target="weak">⚠️ 学困生名单</button></div>' +
     '<div class="card"><div class="card-title">分数段分布 · ' + esc(latest.name) + '</div>' + distBar + '</div>' +
     '<div class="grid-3"><div class="card"><div class="card-title">🎯 尖子生（前 ' + d.settings.topPercent + '%）</div><div style="display:flex;flex-wrap:wrap;gap:4px">' + nameList(topStu) + '</div></div>' +
     '<div class="card"><div class="card-title">🔍 临界生（前 ' + d.settings.criticalPercent + '%）</div><div style="display:flex;flex-wrap:wrap;gap:4px">' + nameList(critStu) + '</div></div>' +
@@ -1810,7 +1930,8 @@ const SUBJECT_PRESETS = {
 };
 function subjectSettingsModal() {
   const d = DB.data;
-  const lines = Object.keys(d.settings.subjectColors || {}).map(k => k + ',' + d.settings.subjectColors[k]).join('\n');
+  const list = (d.settings.gradeSubjects && d.settings.gradeSubjects.length) ? d.settings.gradeSubjects : Object.keys(d.settings.subjectColors || {});
+  const lines = list.map(k => k + ',' + ((d.settings.subjectColors || {})[k] || SUBJECT_PALETTE[list.indexOf(k) % SUBJECT_PALETTE.length])).join('\n');
   openModal(
     '<div class="form-grid">' +
     '<div class="field full"><label>快捷预设（点击后自动填充，可再修改）</label>' +
@@ -1837,17 +1958,21 @@ function fillSubjectPreset(type) {
 function saveSubjects() {
   const v = readFields();
   const d = DB.data;
-  const colors = {};
+  const names = [];
+  const colors = Object.assign({}, d.settings.subjectColors || {});
   (v.subjects || '').split(/\n/).forEach(function (line) {
     const parts = line.split(/[,，]/);
     if (parts.length >= 1 && parts[0].trim()) {
-      colors[parts[0].trim()] = (parts[1] || '').trim() || SUBJECT_PALETTE[Object.keys(colors).length % SUBJECT_PALETTE.length];
+      const nm = parts[0].trim();
+      names.push(nm);
+      if (!colors[nm]) colors[nm] = SUBJECT_PALETTE[Object.keys(colors).length % SUBJECT_PALETTE.length];
     }
   });
-  if (!Object.keys(colors).length) { toast('请至少填写一个科目', 'err'); return; }
+  if (!names.length) { toast('请至少填写一个科目', 'err'); return; }
+  d.settings.gradeSubjects = names;   /* 成绩板块独立科目列表 */
   d.settings.subjectColors = colors;
   DB.save(); closeModal(); render();
-  toast('科目已保存（课表与成绩录入已同步）');
+  toast('成绩科目已保存（课表不受影响，可各自设置）');
 }
 
 /* ---------- 查看成绩（只读）+ 导出 ---------- */
@@ -1883,6 +2008,90 @@ function exportExamCsv(examId) {
   });
   downloadFile('成绩_' + exam.name + '_' + exam.date + '.csv', '\ufeff' + toCSV(rows), 'text/csv;charset=utf-8');
   toast('考试成绩 CSV 已导出');
+}
+
+
+/* ---------- 学情分析：点击查看名单 ---------- */
+function analysisDetailModal(type) {
+  const d = DB.data;
+  const latest = d.exams.filter(e => d.scores.some(s => s.examId === e.id)).sort((a, b) => a.date > b.date ? 1 : -1)[0];
+  if (!latest) { toast('暂无成绩数据', 'err'); return; }
+  const list = d.scores.filter(s => s.examId === latest.id);
+  const sorted = list.slice().sort((a, b) => b.total - a.total);
+  const total = latest.total || 0;
+  let items = [];
+  if (type === 'ref') items = list;
+  else if (type === 'max') items = list.filter(s => s.total === Math.max.apply(null, list.map(x => x.total)));
+  else if (type === 'min') items = list.filter(s => s.total === Math.min.apply(null, list.map(x => x.total)));
+  else if (type === 'pass') items = list.filter(s => s.total >= total * 0.6);
+  else if (type === 'fail') items = list.filter(s => s.total < total * 0.6);
+  else if (type === 'good') items = list.filter(s => s.total >= total * 0.85);
+  else if (type === 'top') { const n = Math.max(1, Math.round(currentStudents().length * (d.settings.topPercent / 100))); items = sorted.slice(0, n); }
+  else if (type === 'crit') { const topN = Math.max(1, Math.round(currentStudents().length * (d.settings.topPercent / 100))); const critN = Math.max(1, Math.round(currentStudents().length * (d.settings.criticalPercent / 100))); items = sorted.slice(topN, critN); }
+  else if (type === 'weak') items = list.filter(s => { const st = getStudent(s.studentId); return st && ((st.warningTags || []).indexOf('学困生') >= 0 || (st.totalScore || 0) < total * 0.6); });
+  const labels = { ref: '参考学生名单', max: '最高分学生', min: '最低分学生', pass: '及格学生名单', fail: '不及格学生名单', good: '优秀学生名单', top: '尖子生名单', crit: '临界生名单', weak: '学困生名单' };
+  const rows = items.map(sc => {
+    const st = getStudent(sc.studentId);
+    return '<tr><td class="num">' + (sc.rank || '—') + '</td><td><div class="stu-cell">' + avatarHtml(st) + '<div><div class="stu-name">' + esc(st ? st.name : '未知') + '</div><div class="stu-no">' + esc(st ? st.no : '') + '</div></div></div></td><td class="num">' + sc.total + '</td></tr>';
+  }).join('');
+  openModal(
+    '<div style="font-size:13px;color:var(--text2);margin-bottom:10px">' + esc(latest.name) + ' · 共 ' + items.length + ' 人</div>' +
+    (rows ? '<div class="table-wrap" style="max-height:62vh;overflow:auto"><table class="tbl"><thead><tr><th>排名</th><th>学生</th><th>总分</th></tr></thead><tbody>' + rows + '</tbody></table></div>' : '<div class="card">' + emptyHtml('暂无学生', '📋') + '</div>'),
+    { title: (labels[type] || '名单') + ' · ' + latest.name, wide: true }
+  );
+}
+
+/* ---------- 班级成员成绩（全班成绩总表） ---------- */
+function gradeClassScoresHtml() {
+  const d = DB.data;
+  const exams = d.exams.filter(e => d.scores.some(s => s.examId === e.id)).sort((a, b) => a.date > b.date ? 1 : -1);
+  if (!exams.length) return '<div class="card">' + emptyHtml('暂无成绩数据，请先录入成绩', '📝') + '</div>';
+  const selId = state.classExamId && exams.find(e => e.id === state.classExamId) ? state.classExamId : exams[exams.length - 1].id;
+  const exam = exams.find(e => e.id === selId);
+  const byStu = {};
+  d.scores.filter(s => s.examId === selId).forEach(s => { byStu[s.studentId] = s; });
+  const q = (state.classStuQuery || '').toLowerCase();
+  const stu = currentStudents().filter(s => !q || s.name.toLowerCase().indexOf(q) >= 0 || String(s.no).indexOf(q) >= 0).sort((a, b) => ((byStu[a.id] && byStu[a.id].rank) || 999) - ((byStu[b.id] && byStu[b.id].rank) || 999));
+  const head = '<tr><th>排名</th><th style="min-width:120px">学生</th>' + exam.subjects.map(s => '<th>' + esc(s.name) + '<br><small style="font-weight:400">' + s.full + '分</small></th>').join('') + '<th>总分</th></tr>';
+  const rows = stu.map(st => {
+    const sc = byStu[st.id];
+    return '<tr><td class="num">' + (sc ? sc.rank : '—') + '</td><td><div class="stu-cell">' + avatarHtml(st) + '<div><div class="stu-name">' + esc(st.name) + '</div><div class="stu-no">' + esc(st.no) + '</div></div></div></td>' +
+      exam.subjects.map(sub => { const x = sc && (sc.subjects || []).find(y => y.name === sub.name); const val = x && x.score != null ? x.score : ''; return '<td class="num' + (val === '' ? ' muted' : '') + '">' + (val === '' ? '—' : val) + '</td>'; }).join('') +
+      '<td class="num" style="font-weight:700">' + (sc ? sc.total : '—') + '</td></tr>';
+  }).join('');
+  const sel = '<select id="classExamSel" style="border:1px solid var(--border);border-radius:10px;padding:8px 12px;min-width:200px">' + exams.map(e => '<option value="' + e.id + '"' + (e.id === selId ? ' selected' : '') + '>' + esc(e.name) + '</option>').join('') + '</select>';
+  return '<div class="card"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px">' +
+    '<span class="badge primary">📝 考试</span>' + sel +
+    '<button class="btn small primary" data-action="setClassExam">加载</button>' +
+    '<input id="classStuSearch" placeholder="🔍 搜索学生…" value="' + esc(state.classStuQuery || '') + '" style="border:1px solid var(--border);border-radius:10px;padding:8px 12px;min-width:150px">' +
+    '<button class="btn small outline" data-action="exportExamCsv" data-id="' + selId + '">导出 CSV</button>' +
+    '</div>' +
+    '<div class="table-wrap" style="max-height:66vh;overflow:auto"><table class="tbl"><thead>' + head + '</thead><tbody>' + (rows || '<tr><td colspan="' + (exam.subjects.length + 3) + '">' + emptyHtml('未找到学生') + '</td></tr>') + '</tbody></table></div></div>';
+}
+
+function addExamSubject(examId) {
+  const d = DB.data;
+  const exam = d.exams.find(e => e.id === examId);
+  if (!exam) return;
+  const nmEl = document.getElementById('newSubjName');
+  const fullEl = document.getElementById('newSubjFull');
+  const nm = (nmEl ? nmEl.value : '').trim();
+  if (!nm) { toast('请输入科目名', 'err'); return; }
+  if (exam.subjects.some(s => s.name === nm)) { toast('该科目已存在', 'err'); return; }
+  const full = parseInt(fullEl ? fullEl.value : '100', 10) || 100;
+  exam.subjects.push({ name: nm, full: full });
+  DB.save();
+  enterScoreModal(examId);
+}
+function removeExamSubject(examId, name) {
+  const d = DB.data;
+  const exam = d.exams.find(e => e.id === examId);
+  if (!exam) return;
+  exam.subjects = exam.subjects.filter(s => s.name !== name);
+  Object.keys(scoreDraft).forEach(sid => { if (scoreDraft[sid]) delete scoreDraft[sid][name]; });
+  d.scores.forEach(sc => { if (sc.examId === examId && sc.subjects) sc.subjects = sc.subjects.filter(x => x.name !== name); });
+  DB.save();
+  enterScoreModal(examId);
 }
 /* ================= 模块：班级事务（6 页签） ================= */
 function renderAffairs() {
@@ -2247,7 +2456,7 @@ function affScheduleHtml() {
     return '<tr><td><div style="font-weight:700">' + esc(p.name) + '</div><div class="period">' + esc(p.start) + ' - ' + esc(p.end) + '</div></td>' + tds +
       '<td class="actions"><button class="btn btn-ico" data-action="editPeriod" data-id="' + i + '">✏️</button><button class="btn btn-ico danger" data-action="delPeriod" data-id="' + i + '">🗑️</button></td></tr>';
   }).join('');
-  return '<div class="btn-row" style="margin-bottom:14px"><button class="btn primary small" data-action="addPeriod">＋ 添加节次</button><button class="btn small outline" data-action="subjectSettings">📚 科目设置</button></div>' +
+  return '<div class="btn-row" style="margin-bottom:14px"><button class="btn primary small" data-action="addPeriod">＋ 添加节次</button><button class="btn small outline" data-action="scheduleSubjectSettings">📚 科目设置</button></div>' +
     '<div class="card"><div class="card-title">📖 课程表 <span class="ct-sub">点击课程格设置科目与教师</span></div>' +
     '<div class="table-wrap"><table class="schedule-table"><thead><tr>' + head + '</tr></thead><tbody>' + rows + '</tbody></table></div></div>';
 }
@@ -2281,7 +2490,8 @@ function savePeriod(idx) {
 function cellFormModal(day, per) {
   const d = DB.data;
   const cell = ((d.schedule.grid[day] || [])[per]) || {};
-  const subjectOpts = Object.keys(d.settings.subjectColors).map(s => '<option value="' + s + '"' + (s === cell.subject ? ' selected' : '') + '>' + s + '</option>').join('');
+  const subjList = (d.schedule.subjects && d.schedule.subjects.length) ? d.schedule.subjects : Object.keys(d.settings.subjectColors || {});
+  const subjectOpts = subjList.map(s => '<option value="' + s + '"' + (s === cell.subject ? ' selected' : '') + '>' + s + '</option>').join('');
   openModal(
     '<div class="form-grid">' +
     '<div class="field"><label>科目</label><select data-field="subject">' + subjectOpts + '</select></div>' +
@@ -2375,10 +2585,11 @@ function activityHtml() {
       '<td class="center">' + esc(a.date) + '</td><td class="center">' + esc(a.leader || '—') + '</td>' +
       '<td style="max-width:220px">' + (sts.length ? sts.slice(0, 6).map(s => '<span class="badge gray" style="margin:1px">' + esc(s.name) + '</span>').join('') + (sts.length > 6 ? '…' : '') : '—') + '</td>' +
       '<td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + esc(a.summary) + '">' + esc(a.summary || '—') + '</td>' +
+      '<td class="log-thumbs-td">' + ((a.photos || []).map((pht, pi) => '<img class="log-thumb" src="' + esc(pht.data) + '" data-action="viewActivityPhoto" data-id="' + a.id + '" data-idx="' + pi + '" title="查看留痕" alt="留痕">').join('') || '<span class="hint" style="font-size:12px">—</span>') + '</td>' +
       '<td class="actions"><button class="btn btn-ico" data-action="editActivity" data-id="' + a.id + '">✏️</button><button class="btn btn-ico danger" data-action="delActivity" data-id="' + a.id + '">🗑️</button></td></tr>';
   }).join('');
   return '<div class="btn-row" style="margin-bottom:14px"><button class="btn primary" data-action="addActivity">＋ 新建研学活动</button></div>' +
-    '<div class="card"><div class="card-title">🎒 周末研学活动</div><div class="table-wrap"><table class="tbl"><thead><tr><th>活动名称</th><th>状态</th><th>日期</th><th>带队老师</th><th>报名学生</th><th>总结</th><th>操作</th></tr></thead><tbody>' + (rows || '<tr><td colspan="7">' + emptyHtml('暂无活动') + '</td></tr>') + '</tbody></table></div></div>';
+    '<div class="card"><div class="card-title">🎒 周末研学活动</div><div class="table-wrap"><table class="tbl"><thead><tr><th>活动名称</th><th>状态</th><th>日期</th><th>带队老师</th><th>报名学生</th><th>总结</th><th>留痕</th><th>操作</th></tr></thead><tbody>' + (rows || '<tr><td colspan="8">' + emptyHtml('暂无活动') + '</td></tr>') + '</tbody></table></div></div>';
 }
 function activityFormModal(a) {
   a = a || {};
@@ -2394,11 +2605,30 @@ function activityFormModal(a) {
     field('leader', '带队老师', a.leader || DB.data.settings.teacherName, 'text') +
     '<div class="field full"><label>报名学生（点击选择）</label><div class="chip-row" data-chipgroup="activityStu">' + chips + '</div></div>' +
     field('summary', '活动总结', a.summary || '', 'textarea', 'full') +
+    '<div class="field full"><label>📎 活动留痕（拍照 / 上传截图）</label>' +
+    '<div class="log-photo-pick">' +
+    '<button type="button" class="btn small outline" id="actPhotoCameraBtn">📷 拍照</button>' +
+    '<button type="button" class="btn small outline" id="actPhotoGalleryBtn">🖼️ 上传截图/图片</button>' +
+    '<span class="hint" style="font-size:12px;color:var(--text3)">最多 ' + LOG_PHOTO_LIMIT + ' 张，自动压缩</span>' +
+    '</div><div id="actPhotoBox" class="log-thumbs"></div>' +
+    '<input type="file" id="actPhotoCamera" accept="image/*" capture="environment" style="display:none">' +
+    '<input type="file" id="actPhotoGallery" accept="image/*" multiple style="display:none">' +
+    '</div>' +
     '</div>',
     { title: a.id ? '编辑活动' : '新建研学活动' }
   );
   const foot = modalFootHtml('<button class="btn primary" data-action="saveActivity" data-id="' + (a.id || '') + '">保存</button>');
   document.getElementById('modalBox').insertAdjacentHTML('beforeend', foot);
+  activityPhotosDraft = (a.photos || []).map(ph => typeof ph === 'string' ? { data: ph, name: '留痕-' + Date.now() + '.jpg', ts: Date.now() } : Object.assign({}, ph));
+  renderActivityPhotoPicker();
+  const cBtn = document.getElementById('actPhotoCameraBtn');
+  const gBtn = document.getElementById('actPhotoGalleryBtn');
+  const cIn = document.getElementById('actPhotoCamera');
+  const gIn = document.getElementById('actPhotoGallery');
+  if (cBtn) cBtn.addEventListener('click', function () { cIn.click(); });
+  if (gBtn) gBtn.addEventListener('click', function () { gIn.click(); });
+  cIn.addEventListener('change', function () { if (cIn.files && cIn.files[0]) addActivityPhoto(cIn.files[0]); cIn.value = ''; });
+  gIn.addEventListener('change', function () { const fs = gIn.files || []; for (let i = 0; i < fs.length; i++) addActivityPhoto(fs[i]); gIn.value = ''; });
 }
 function saveActivity(id) {
   const v = readFields();
@@ -2406,9 +2636,89 @@ function saveActivity(id) {
   const students = [];
   document.querySelectorAll('#modalBox [data-chipgroup="activityStu"] .chip.on').forEach(el => students.push(el.getAttribute('data-chip')));
   const d = DB.data;
-  const payload = { name: v.name, type: v.type, date: v.date, status: v.status, leader: v.leader, students, summary: v.summary };
+  const payload = { name: v.name, type: v.type, date: v.date, status: v.status, leader: v.leader, students, summary: v.summary, photos: activityPhotosDraft.slice() };
+  activityPhotosDraft = [];
   if (id) { const x = d.activities.find(o => o.id === id); if (x) Object.assign(x, payload); toast('活动已更新'); }
   else { d.activities.push(Object.assign({ id: uid('ac') }, payload)); toast('活动已创建'); }
   DB.save(); closeModal(); render();
 }
 
+
+
+/* ---------- 课表科目设置（与成绩板块独立） ---------- */
+function scheduleSubjectSettingsModal() {
+  const d = DB.data;
+  const list = (d.schedule.subjects && d.schedule.subjects.length) ? d.schedule.subjects : Object.keys(d.settings.subjectColors || {});
+  const lines = list.map(k => k + ',' + ((d.settings.subjectColors || {})[k] || SUBJECT_PALETTE[list.indexOf(k) % SUBJECT_PALETTE.length])).join('\n');
+  openModal(
+    '<div class="form-grid">' +
+    '<div class="field full"><label>快捷预设</label>' +
+    '<div class="btn-row" style="flex-wrap:wrap">' +
+    '<button type="button" class="btn small primary" data-action="subjectPreset" data-type="primary">小学</button>' +
+    '<button type="button" class="btn small primary" data-action="subjectPreset" data-type="junior">初中</button>' +
+    '<button type="button" class="btn small primary" data-action="subjectPreset" data-type="senior">高中</button>' +
+    '</div></div>' +
+    '<div class="field full"><label>课表科目（每行一条“科目,颜色”，仅影响课表）</label>' +
+    '<textarea data-field="subjects" rows="10" style="font-family:monospace">' + esc(lines) + '</textarea></div>' +
+    '<div style="font-size:12px;color:var(--text3)">此处修改只影响课表下拉；成绩录入的科目请到“成绩管理→科目设置”里单独设置。</div>' +
+    '</div>',
+    { title: '📚 课表科目设置' }
+  );
+  const foot = modalFootHtml('<button class="btn primary" data-action="saveScheduleSubjects">保存课表科目</button>');
+  document.getElementById('modalBox').insertAdjacentHTML('beforeend', foot);
+}
+function saveScheduleSubjects() {
+  const v = readFields();
+  const d = DB.data;
+  const names = [];
+  const colors = Object.assign({}, d.settings.subjectColors || {});
+  (v.subjects || '').split(/\n/).forEach(function (line) {
+    const parts = line.split(/[,，]/);
+    if (parts.length >= 1 && parts[0].trim()) {
+      const nm = parts[0].trim();
+      names.push(nm);
+      if (!colors[nm]) colors[nm] = SUBJECT_PALETTE[Object.keys(colors).length % SUBJECT_PALETTE.length];
+    }
+  });
+  if (!names.length) { toast('请至少填写一个科目', 'err'); return; }
+  d.schedule.subjects = names;
+  d.settings.subjectColors = colors;
+  DB.save(); closeModal(); render();
+  toast('课表科目已保存（成绩板块不受影响）');
+}
+
+
+/* ---------- 德育活动 · 活动留痕（拍照/上传） ---------- */
+let activityPhotosDraft = [];
+function addActivityPhoto(file) {
+  if (activityPhotosDraft.length >= LOG_PHOTO_LIMIT) { toast('最多 ' + LOG_PHOTO_LIMIT + ' 张留痕', 'err'); return; }
+  compressImageFile(file, function (p) {
+    if (!p) { toast('图片读取失败', 'err'); return; }
+    if (!logStorageGuard(p.data.length)) return;
+    activityPhotosDraft.push(p);
+    renderActivityPhotoPicker();
+  });
+}
+function renderActivityPhotoPicker() {
+  const box = document.getElementById('actPhotoBox');
+  if (!box) return;
+  box.innerHTML = activityPhotosDraft.map(function (p, i) {
+    return '<div class="log-thumb-wrap"><img class="log-thumb" src="' + esc(p.data) + '" data-action="viewActivityPhoto" data-idx="' + i + '" alt="留痕">' +
+      '<button type="button" class="log-thumb-x" data-action="removeActivityPhoto" data-idx="' + i + '" title="删除">×</button></div>';
+  }).join('') || '<span class="hint" style="font-size:12px;color:var(--text3)">暂无留痕图片</span>';
+}
+function removeActivityPhoto(idx) {
+  if (idx >= 0 && idx < activityPhotosDraft.length) activityPhotosDraft.splice(idx, 1);
+  renderActivityPhotoPicker();
+}
+function viewActivityPhoto(actId, idx) {
+  let photos = activityPhotosDraft;
+  if (actId) { const a = DB.data.activities.find(x => x.id === actId); photos = (a && a.photos) || []; }
+  const p = photos[idx];
+  if (!p) return;
+  openModal(
+    '<div class="log-viewer"><img src="' + esc(p.data) + '" alt="活动留痕">' +
+    '<div style="text-align:center;font-size:12px;color:var(--text3);margin-top:10px">' + esc(p.name || '留痕图片') + ' · ' + (idx + 1) + ' / ' + photos.length + '</div></div>',
+    { title: '📎 活动留痕' }
+  );
+}

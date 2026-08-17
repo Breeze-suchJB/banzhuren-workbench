@@ -500,3 +500,15 @@ table.tbl{width:100%;border-collapse:collapse;font-size:13px;min-width:560px}
 .full-score-row .field label{font-size:12px;color:var(--text3)}
 
 .num.muted{color:var(--text3)}
+
+.dash-grid{display:flex;flex-wrap:wrap;gap:16px}
+.dash-card{flex:1 1 100%}
+.dash-card.half{flex:1 1 calc(50% - 8px);min-width:320px}
+.dash-block-list{display:flex;flex-direction:column;gap:8px}
+.dash-block-row{display:flex;align-items:center;gap:12px;border:1px solid var(--border);border-radius:10px;padding:10px 12px;background:#fff}
+.dash-block-row.dragging{opacity:.5}
+.dash-block-row.drag-over{border-color:var(--primary);background:var(--primary-light)}
+.db-drag{cursor:grab;color:var(--text3);font-size:16px}
+.db-name{flex:1;font-weight:600;font-size:13.5px}
+.dash-width{border:1px solid var(--border);border-radius:8px;padding:4px 6px}
+@media (max-width:720px){.dash-card.half{flex:1 1 100%}}

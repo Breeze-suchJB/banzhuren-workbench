@@ -1632,6 +1632,7 @@ const state = {
 };
 const MODULE_RENDER = {
   dashboard: renderDashboard,
+  settings: renderSettings,
   classes: renderClasses,
   students: renderStudents,
   grades: renderGrades,
@@ -1880,7 +1881,31 @@ const ACTIONS = {
     }});
   },
   importStudents: function () { document.getElementById('importCsv').click(); },
-  exportStudents: function () { exportStudentsCsv(); },
+  exportStudents: function () { exportStudentsOpen(); },
+  exportStudentsRange: function () { exportStudentsRange(); },
+  dashJump: function (el) {
+    const mod = el.dataset.mod, tab = el.dataset.tab || '';
+    state.module = mod;
+    const tabMap = { attendance: 'attTab', affairs: 'affTab', work: 'workTab', homework: 'hwTab', grades: 'gradeTab', contact: 'contactTab', evaluation: 'evalTab', moral: 'moralTab', safety: 'safeTab', assistant: 'assistTab', subjecttools: 'subjTab', leave: 'leaveFilter' };
+    if (tab && tabMap[mod]) state[tabMap[mod]] = tab;
+    closeSidebar();
+    render();
+  },
+  setClassExam: function () { const sel = document.getElementById('classExamSel'); if (sel) { state.classExamId = sel.value; render(); } },
+  analysisDetail: function (el) { analysisDetailModal(el.dataset.target || ''); },
+  addExamSubject: function (el) { addExamSubject(el.dataset.id); },
+  removeExamSubject: function (el) { removeExamSubject(el.dataset.id, el.dataset.subject); },
+  viewActivityPhoto: function (el) { viewActivityPhoto(el.dataset.id || '', parseInt(el.dataset.idx || '0', 10)); },
+  removeActivityPhoto: function (el) { removeActivityPhoto(parseInt(el.dataset.idx || '0', 10)); },
+  dashBlockMove: function (el) {
+    const d = DB.data;
+    const arr = d.settings.dashboard.blocks;
+    const i = arr.findIndex(b => b.id === el.dataset.id);
+    const j = i + (el.dataset.dir === 'up' ? -1 : 1);
+    if (i >= 0 && j >= 0 && j < arr.length) { const tmp = arr[i]; arr[i] = arr[j]; arr[j] = tmp; DB.save(); render(); }
+  },
+  saveDashSettings: function () { saveDashSettings(); },
+  jumpDash: function () { state.module = 'dashboard'; render(); },
 
   /* 成绩 */
   addExam: function () { examFormModal(); },
@@ -1900,6 +1925,8 @@ const ACTIONS = {
   subjectSettings: function () { subjectSettingsModal(); },
   saveSubjects: function () { saveSubjects(); },
   subjectPreset: function (el) { fillSubjectPreset(el.dataset.type); },
+  scheduleSubjectSettings: function () { scheduleSubjectSettingsModal(); },
+  saveScheduleSubjects: function () { saveScheduleSubjects(); },
   gradeTab: function (el) { state.gradeTab = el.dataset.tab; render(); },
   doCompare: function () {
     state.cmpA = document.getElementById('cmpA') ? document.getElementById('cmpA').value : '';
@@ -2386,14 +2413,52 @@ function saveDepart() {
   toast('离校登记已保存');
 }
 ACTIONS.saveDepart = saveDepart;
-function exportStudentsCsv() {
-  const rows = [['学号', '姓名', '性别', '手机号', '住校', '职务', '家庭情况', '家长姓名', '监护人', '入学日期', '小组编号', '综合成绩', '排名', '积分', '预警标签', '标签']];
-  currentStudents().forEach(s => {
-    rows.push([s.no, s.name, s.gender, s.phone, s.boarding ? '是' : '否', s.position || '', s.family || '', s.parentName || '', s.guardian || '', s.admitDate || '', s.groupId || '', s.totalScore || '', s.classRank || '', s.score || 0, (s.warningTags || []).join('/'), (s.tags || []).join('/')]);
-  });
-  downloadFile('学生名单_' + (currentClass() ? currentClass().name : '班级') + '.csv', '\ufeff' + toCSV(rows), 'text/csv;charset=utf-8');
-  toast('学生 CSV 已导出');
+function exportStudentsOpen() {
+  openModal(
+    '<div class="form-grid">' +
+    field('rStart', '开始日期（选填）', '', 'date') +
+    field('rEnd', '结束日期（选填）', '', 'date') +
+    '<div style="font-size:12.5px;color:var(--text3)">选择时间段后导出：每个学生的期内考勤（出勤/迟到/缺勤/请假）、积分增减、违纪次数、家校沟通次数都会一并统计；留空则导出全部学生基础信息。</div>' +
+    '</div>',
+    { title: '导出学生 CSV' }
+  );
+  const foot = modalFootHtml('<button class="btn primary" data-action="exportStudentsRange">导出 CSV</button>');
+  document.getElementById('modalBox').insertAdjacentHTML('beforeend', foot);
 }
+function exportStudentsRange() {
+  const v = readFields();
+  exportStudentsCsv(v.rStart || '', v.rEnd || '');
+}
+function exportStudentsCsv(rStart, rEnd) {
+  const d = DB.data;
+  const S = rStart && rEnd ? (rStart <= rEnd ? rStart : rEnd) : '';
+  const E = rStart && rEnd ? (rStart <= rEnd ? rEnd : rStart) : '';
+  const inR = function (dt) { return !!dt && (!S || (dt >= S && dt <= E)); };
+  const head = ['学号', '姓名', '性别', '手机号', '住校', '职务', '家庭情况', '家长姓名', '监护人', '入学日期', '小组编号', '综合成绩', '排名', '积分', '预警标签', '标签'];
+  if (S) head.push('期内出勤', '期内迟到', '期内缺勤', '期内请假', '期内积分', '期内违纪', '期内沟通');
+  const rows = [head];
+  currentStudents().forEach(s => {
+    const base = [s.no, s.name, s.gender, s.phone, s.boarding ? '是' : '否', s.position || '', s.family || '', s.parentName || '', s.guardian || '', s.admitDate || '', s.groupId || '', s.totalScore || '', s.classRank || '', s.score || 0, (s.warningTags || []).join('/'), (s.tags || []).join('/')];
+    if (S) {
+      const att = d.attendance.filter(a => a.studentId === s.id && inR(a.date));
+      const pts = d.points.filter(p => p.studentId === s.id && inR(p.date));
+      rows.push(base.concat([
+        att.filter(a => a.status === '出勤').length,
+        att.filter(a => a.status === '迟到').length,
+        att.filter(a => a.status === '缺勤').length,
+        att.filter(a => a.status === '请假').length,
+        pts.reduce((a, b) => a + (b.value || 0), 0),
+        d.violations.filter(v => v.studentId === s.id && inR(v.date)).length,
+        d.contacts.filter(c => c.studentId === s.id && inR(c.date)).length
+      ]));
+    } else rows.push(base);
+  });
+  const fname = '学生名单' + (S ? '_' + S + '_' + E : '') + '_' + (currentClass() ? currentClass().name : '班级') + '.csv';
+  downloadFile(fname, '\ufeff' + toCSV(rows), 'text/csv;charset=utf-8');
+  closeModal();
+  toast('学生 CSV 已导出' + (S ? '（' + S + ' ~ ' + E + '）' : ''));
+}
+
 function handleImportCsv(input) {
   readFile(input, function (text) {
     const rows = parseCSV(text);
@@ -2501,7 +2566,41 @@ function handleAvatarFile(input) {
   reader.readAsDataURL(f);
 }
 
+function filterPersonalOptions(q) {
+  q = (q || '').trim().toLowerCase();
+  const sel = document.getElementById('personalStu');
+  if (!sel) return;
+  Array.from(sel.options).forEach(function (o) { o.style.display = (!q || o.textContent.toLowerCase().indexOf(q) >= 0) ? '' : 'none'; });
+  const visible = Array.from(sel.options).filter(function (o) { return o.style.display !== 'none'; });
+  if (visible.length === 1) { sel.value = visible[0].value; }
+  else if (!visible.length && sel.options.length) { sel.value = ''; }
+}
 /* ================= 事件绑定 ================= */
+document.addEventListener('input', function (e) {
+  const t = e.target;
+  if (t && t.id === 'personalSearch') filterPersonalOptions(t.value);
+});
+
+document.addEventListener('dragstart', function (e) {
+  const row = e.target.closest ? e.target.closest('.dash-block-row') : null;
+  if (row) { e.dataTransfer.setData('text/plain', row.getAttribute('data-id')); row.classList.add('dragging'); }
+});
+document.addEventListener('dragover', function (e) {
+  const row = e.target.closest ? e.target.closest('.dash-block-row') : null;
+  if (row) { e.preventDefault(); row.classList.add('drag-over'); }
+});
+document.addEventListener('dragleave', function (e) {
+  const row = e.target.closest ? e.target.closest('.dash-block-row') : null;
+  if (row) row.classList.remove('drag-over');
+});
+document.addEventListener('drop', function (e) {
+  e.preventDefault();
+  const from = e.dataTransfer.getData('text/plain');
+  const row = e.target.closest ? e.target.closest('.dash-block-row') : null;
+  if (from && row) moveDashBlock(from, row.getAttribute('data-id'));
+  document.querySelectorAll('.dash-block-row').forEach(function (r) { r.classList.remove('dragging', 'drag-over'); });
+});
+
 document.addEventListener('click', function (e) {
   const target = e.target;
   /* 弹窗遮罩点击关闭 */
@@ -2531,6 +2630,20 @@ document.addEventListener('change', function (e) {
     content.innerHTML = MODULE_RENDER[state.module]();
     const inp = document.getElementById('studentSearch');
     if (inp) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
+  } else if (t.classList && t.classList.contains('dash-enable')) {
+    const b = DB.data.settings.dashboard.blocks.find(x => x.id === t.dataset.id);
+    if (b) { b.enabled = t.checked; DB.save(); render(); }
+  } else if (t.classList && t.classList.contains('dash-width')) {
+    const b = DB.data.settings.dashboard.blocks.find(x => x.id === t.dataset.id);
+    if (b) { b.w = t.value; DB.save(); render(); }
+  } else if (t.id === 'classStuSearch') {
+    state.classStuQuery = t.value;
+    const content = document.getElementById('content');
+    if (content) content.innerHTML = MODULE_RENDER[state.module]();
+    const inp = document.getElementById('classStuSearch');
+    if (inp) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
+  } else if (t.id === 'personalSearch') {
+    filterPersonalOptions(t.value);
   } else if (t.id === 'avatarFile') {
     handleAvatarFile(t);
     t.value = '';
