@@ -952,8 +952,12 @@ function renderDataMgr() {
     field('summerEnd', '暑假结束', d.settings.summerEnd, 'date') +
     '<div class="field"><label>主题配色</label><select data-field="theme">' + themeOpts + '</select></div>' +
     '<div class="field"><label>评语权重（教师占比 %）</label><input type="number" data-field="commentTeacherWeight" min="0" max="100" value="' + Math.round((d.settings.commentTeacherWeight || 0.7) * 100) + '"></div>' +
-    '<div class="field"><label>尖子生百分位 %</label><input type="number" data-field="topPercent" min="1" max="50" value="' + esc(d.settings.topPercent) + '"></div>' +
-    '<div class="field"><label>临界生百分位 %</label><input type="number" data-field="criticalPercent" min="1" max="90" value="' + esc(d.settings.criticalPercent) + '"></div>' +
+    '<div class="field"><label>尖子生 划线方式</label><select data-field="topMode"><option value="pct"' + (d.settings.topMode !== 'score' ? ' selected' : '') + '>按百分位</option><option value="score"' + (d.settings.topMode === 'score' ? ' selected' : '') + '>按具体分数</option></select></div>' +
+    '<div class="field"><label>尖子生 ' + (d.settings.topMode === 'score' ? '分数线（分）' : '百分位 %') + '</label><input type="number" data-field="topValue" min="1" max="' + (d.settings.topMode === 'score' ? '9999' : '50') + '" value="' + esc(d.settings.topMode === 'score' ? (d.settings.topScore || 0) : d.settings.topPercent) + '"></div>' +
+    '<div class="field"><label>临界生 划线方式</label><select data-field="criticalMode"><option value="pct"' + (d.settings.criticalMode !== 'score' ? ' selected' : '') + '>按百分位</option><option value="score"' + (d.settings.criticalMode === 'score' ? ' selected' : '') + '>按具体分数</option></select></div>' +
+    '<div class="field"><label>临界生 ' + (d.settings.criticalMode === 'score' ? '分数线（分）' : '百分位 %') + '</label><input type="number" data-field="criticalValue" min="1" max="' + (d.settings.criticalMode === 'score' ? '9999' : '90') + '" value="' + esc(d.settings.criticalMode === 'score' ? (d.settings.criticalScore || 0) : d.settings.criticalPercent) + '"></div>' +
+    '<div class="field"><label>不及格生 划线方式</label><select data-field="failMode"><option value="pct"' + (d.settings.failMode !== 'score' ? ' selected' : '') + '>按百分位</option><option value="score"' + (d.settings.failMode === 'score' ? ' selected' : '') + '>按具体分数</option></select></div>' +
+    '<div class="field"><label>不及格生 ' + (d.settings.failMode === 'score' ? '分数线（低于此分）' : '百分位（后 %）') + '</label><input type="number" data-field="failValue" min="1" max="' + (d.settings.failMode === 'score' ? '9999' : '90') + '" value="' + esc(d.settings.failMode === 'score' ? (d.settings.failScore || 0) : d.settings.failPercent) + '"></div>' +
     field('tagLibrary', '学生标签库（逗号分隔）', d.settings.tagLibrary.join(','), 'text', 'full') +
     field('subjectColors', '科目配色（每行一条"科目,颜色"）', subjectRows, 'textarea', 'full') +
     '<div class="field"><label class="hint" style="font-size:13px"><input type="checkbox" data-field="maskPhone" ' + (d.settings.maskPhone ? 'checked' : '') + '> 手机号脱敏</label></div>' +
@@ -983,8 +987,15 @@ function saveSettings() {
   ['termStart', 'termEnd', 'retireDate', 'winterStart', 'winterEnd', 'summerStart', 'summerEnd'].forEach(k => { if (v[k]) d.settings[k] = v[k]; });
   if (v.theme) d.settings.theme = v.theme;
   d.settings.commentTeacherWeight = Math.min(1, Math.max(0, (parseInt(v.commentTeacherWeight, 10) || 70) / 100));
-  d.settings.topPercent = Math.min(50, Math.max(1, parseInt(v.topPercent, 10) || 20));
-  d.settings.criticalPercent = Math.min(90, Math.max(1, parseInt(v.criticalPercent, 10) || 40));
+  d.settings.topMode = v.topMode === 'score' ? 'score' : 'pct';
+  if (d.settings.topMode === 'score') d.settings.topScore = Math.max(0, parseInt(v.topValue, 10) || 0);
+  else d.settings.topPercent = Math.min(50, Math.max(1, parseInt(v.topValue, 10) || 20));
+  d.settings.criticalMode = v.criticalMode === 'score' ? 'score' : 'pct';
+  if (d.settings.criticalMode === 'score') d.settings.criticalScore = Math.max(0, parseInt(v.criticalValue, 10) || 0);
+  else d.settings.criticalPercent = Math.min(90, Math.max(1, parseInt(v.criticalValue, 10) || 40));
+  d.settings.failMode = v.failMode === 'score' ? 'score' : 'pct';
+  if (d.settings.failMode === 'score') d.settings.failScore = Math.max(0, parseInt(v.failValue, 10) || 0);
+  else d.settings.failPercent = Math.min(90, Math.max(1, parseInt(v.failValue, 10) || 15));
   d.settings.maskPhone = !!v.maskPhone;
   d.settings.showClock = !!v.showClock;
   d.settings.tagLibrary = (v.tagLibrary || '').split(/[,，]/).map(x => x.trim()).filter(Boolean);
@@ -1882,6 +1893,10 @@ const ACTIONS = {
   classAddSubject: function (el) { classAddSubject(el.dataset.id); },
   saveClassAddSubject: function (el) { saveClassAddSubject(el.dataset.id); },
   classRemoveSubject: function (el) { classRemoveSubject(el.dataset.id, el.dataset.subject); },
+  openDeleteSubjectModal: function (el) { openDeleteSubjectModal(el.dataset.id); },
+  confirmDeleteSubject: function (el) { confirmDeleteSubject(el.dataset.id, el.dataset.subject); },
+  undoDeleteSubject: function () { undoDeleteSubject(); },
+  attDetail: function (el) { attDetailModal(el.dataset.id); },
   sortClassScores: function (el) { sortClassScores(el); },
   gradeTab: function (el) { state.gradeTab = el.dataset.tab; render(); },
   doCompare: function () {

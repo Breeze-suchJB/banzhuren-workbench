@@ -1,5 +1,5 @@
 /* 构建版本 */
-const APP_VERSION = '20260817-144051';
+const APP_VERSION = '20260817-150247';
 /* ================= 数据层 ================= */
 const STORAGE_KEY = 'banzhuren_workbench_v1';
 const DB_VERSION = 1;
@@ -79,6 +79,9 @@ function defaultSettings() {
     commentTeacherWeight: 0.7,
     topPercent: 20,
     criticalPercent: 40,
+    topMode: 'pct', topScore: 0,
+    criticalMode: 'pct', criticalScore: 0,
+    failMode: 'pct', failPercent: 15, failScore: 0,
     maskPhone: true,
     showClock: true,
     dashboard: { blocks: DASH_DEFAULT_BLOCKS.map(function (b) { return Object.assign({}, b); }) },
@@ -1546,6 +1549,7 @@ function dashPreviewHtml() {
 }
 /* ================= 模块：成绩管理 ================= */
 let scoreDraft = {};  /* 录入成绩草稿（切换科目增删时保留） */
+let lastDeletedSubject = null;  /* 最近删除的科目（可回退） */
 const MAIN_SUBJECTS = ['语文', '数学', '英语'];
 const COMBO_CHAR = { '物': '物理', '化': '化学', '生': '生物', '政': '政治', '史': '历史', '地': '地理' };
 function renderGrades() {
@@ -1631,8 +1635,8 @@ function enterScoreModal(examId) {
     return '<tr data-sid="' + s.id + '"><td class="stu-nm">' + esc(s.name) + ' <small style="color:var(--text3);font-weight:400">' + esc(s.no) + '</small></td>' + inputs + '<td class="row-total">' + total + '</td><td class="row-rank">' + rank + '</td></tr>';
   }).join('');
   const fullRow = '<div class="full-score-row" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;align-items:flex-end">' +
-    exam.subjects.map(sub => '<div class="field" style="margin:0"><label>' + esc(sub.name) + ' 满分 <button type="button" class="btn btn-ico danger" data-action="removeExamSubject" data-id="' + examId + '" data-subject="' + esc(sub.name) + '" title="删除该科目">×</button></label><input type="number" class="full-score-input" data-subject="' + esc(sub.name) + '" value="' + sub.full + '" min="1" max="500" style="width:84px"></div>').join('') +
-    '<div class="field" style="margin:0"><label>＋ 新增科目</label><div style="display:flex;gap:6px"><input id="newSubjName" placeholder="科目名" style="width:90px;border:1px solid var(--border);border-radius:8px;padding:6px 8px"><input id="newSubjFull" type="number" value="100" min="1" max="500" style="width:70px;border:1px solid var(--border);border-radius:8px;padding:6px 8px"><button type="button" class="btn small primary" data-action="addExamSubject" data-id="' + examId + '">添加</button></div></div>' +
+    exam.subjects.map(sub => '<div class="field" style="margin:0"><label>' + esc(sub.name) + ' 满分</label><input type="number" class="full-score-input" data-subject="' + esc(sub.name) + '" value="' + sub.full + '" min="1" max="500" style="width:84px"></div>').join('') +
+    '<div class="field" style="margin:0"><label>科目操作</label><div style="display:flex;gap:6px;align-items:center"><input id="newSubjName" placeholder="科目名" style="width:90px;border:1px solid var(--border);border-radius:8px;padding:6px 8px"><input id="newSubjFull" type="number" value="100" min="1" max="500" style="width:70px;border:1px solid var(--border);border-radius:8px;padding:6px 8px"><button type="button" class="btn small primary" data-action="addExamSubject" data-id="' + examId + '">＋ 添加</button><button type="button" class="btn small danger" data-action="openDeleteSubjectModal" data-id="' + examId + '">－ 删除</button>' + (lastDeletedSubject && lastDeletedSubject.examId === examId ? '<button type="button" class="btn small outline" data-action="undoDeleteSubject">↩ 回退</button>' : '') + '</div></div>' +
     '<span class="hint" style="font-size:12px;color:var(--text3);padding-bottom:6px">修改满分失焦即生效；可增删科目（如初中数学120、高中数学150）</span></div>';
   openModal(
     '<div style="font-size:13px;color:var(--text2);margin-bottom:10px">' + esc(exam.name) + ' · ' + esc(exam.date) + ' · 填写各科成绩后保存，自动计算总分与班级排名</div>' +
@@ -1790,12 +1794,10 @@ function gradeAnalysisHtml() {
     const nextFrom = idx < segs.length - 1 ? segs[idx + 1].from : -1;
     return { label: seg.label, color: seg.color, n: list.filter(s => s.total >= seg.from && s.total < (nextFrom < 0 ? Infinity : nextFrom)).length };
   });
-  const topN = Math.max(1, Math.round(stu.length * (d.settings.topPercent / 100)));
-  const critN = Math.max(1, Math.round(stu.length * (d.settings.criticalPercent / 100)));
   const sorted = list.slice().sort((a, b) => b.total - a.total);
-  const topStu = sorted.slice(0, topN).map(s => getStudent(s.studentId)).filter(Boolean);
-  const critStu = sorted.slice(topN, critN).map(s => getStudent(s.studentId)).filter(Boolean);
-  const weakStu = stu.filter(s => (s.warningTags || []).indexOf('学困生') >= 0 || (s.totalScore || 0) < latest.total * 0.6);
+  const topStu = tierTop(sorted).map(s => getStudent(s.studentId)).filter(Boolean);
+  const critStu = tierCrit(sorted).map(s => getStudent(s.studentId)).filter(Boolean);
+  const weakStu = tierFail(list).map(s => getStudent(s.studentId)).filter(Boolean);
   const distBar = '<div class="dist-bar">' + dist.map(seg => '<i style="width:' + (cnt ? (seg.n / cnt * 100).toFixed(1) : 0) + '%;background:' + seg.color + '" title="' + seg.label + ' ' + seg.n + '人"></i>').join('') + '</div>' +
     '<div class="dist-legend">' + dist.map(seg => '<span class="lg"><i style="background:' + seg.color + '"></i>' + seg.label + '：' + seg.n + ' 人（' + (cnt ? Math.round(seg.n / cnt * 1000) / 10 : 0) + '%）</span>').join('') + '</div>';
   const nameList = function (arr) { return arr.map(s => '<span class="badge gray" style="margin:2px">' + esc(s.name) + '</span>').join('') || '<span style="color:var(--text3)">暂无</span>'; };
@@ -1807,11 +1809,11 @@ function gradeAnalysisHtml() {
     statCard('var(--teal)', '及格率', passRate + '%', '及格 ' + pass + ' 人', '', 'analysisDetail', 'pass') +
     statCard('var(--purple)', '优秀率', goodRate + '%', '优秀 ' + good + ' 人', '', 'analysisDetail', 'good') +
     '</div>' +
-    '<div class="btn-row" style="margin-bottom:10px;flex-wrap:wrap"><button class="btn small outline" data-action="analysisDetail" data-target="fail">📋 不及格名单</button><button class="btn small outline" data-action="analysisDetail" data-target="top">🎯 尖子生名单</button><button class="btn small outline" data-action="analysisDetail" data-target="crit">🔍 临界生名单</button><button class="btn small outline" data-action="analysisDetail" data-target="weak">⚠️ 学困生名单</button></div>' +
+    '<div class="btn-row" style="margin-bottom:10px;flex-wrap:wrap"><button class="btn small outline" data-action="analysisDetail" data-target="fail">📋 不及格名单</button><button class="btn small outline" data-action="analysisDetail" data-target="top">🎯 尖子生名单</button><button class="btn small outline" data-action="analysisDetail" data-target="crit">🔍 临界生名单</button><button class="btn small outline" data-action="analysisDetail" data-target="weak">⚠️ 不及格生名单</button></div>' +
     '<div class="card"><div class="card-title">分数段分布 · ' + esc(latest.name) + '</div>' + distBar + '</div>' +
-    '<div class="grid-3"><div class="card"><div class="card-title">🎯 尖子生（前 ' + d.settings.topPercent + '%）</div><div style="display:flex;flex-wrap:wrap;gap:4px">' + nameList(topStu) + '</div></div>' +
-    '<div class="card"><div class="card-title">🔍 临界生（前 ' + d.settings.criticalPercent + '%）</div><div style="display:flex;flex-wrap:wrap;gap:4px">' + nameList(critStu) + '</div></div>' +
-    '<div class="card"><div class="card-title">⚠️ 学困生</div><div style="display:flex;flex-wrap:wrap;gap:4px">' + nameList(weakStu) + '</div></div></div>';
+    '<div class="grid-3"><div class="card"><div class="card-title">🎯 尖子生（' + tierLabel('top') + '）</div><div style="display:flex;flex-wrap:wrap;gap:4px">' + nameList(topStu) + '</div></div>' +
+    '<div class="card"><div class="card-title">🔍 临界生（' + tierLabel('crit') + '）</div><div style="display:flex;flex-wrap:wrap;gap:4px">' + nameList(critStu) + '</div></div>' +
+    '<div class="card"><div class="card-title">⚠️ 不及格生（' + tierLabel('fail') + '）</div><div style="display:flex;flex-wrap:wrap;gap:4px">' + nameList(weakStu) + '</div></div></div>';
 }
 
 /* ================= 模块：考勤管理 ================= */
@@ -1863,7 +1865,7 @@ function attStatsHtml() {
     const cls = rate >= 95 ? '' : rate >= 90 ? 'warn' : 'danger';
     return '<tr><td><div class="stu-cell">' + avatarHtml(st) + '<div><div class="stu-name">' + esc(st.name) + '</div><div class="stu-no">' + esc(st.no) + '</div></div></div></td>' +
       '<td class="center">' + p + '</td><td class="center" style="color:var(--warn)">' + l + '</td><td class="center" style="color:var(--danger)">' + ab + '</td><td class="center">' + lv + '</td>' +
-      '<td style="min-width:120px"><div class="progress ' + cls + '"><i style="width:' + rate + '%"></i></div><div style="font-size:11px;color:var(--text3)">' + rate + '%</div></td></tr>';
+      '<td style="min-width:130px;cursor:pointer" data-action="attDetail" data-id="' + st.id + '" title="点击查看该生出勤明细"><div class="progress ' + cls + '"><i style="width:' + rate + '%"></i></div><div style="font-size:11px;color:var(--text3)">' + rate + '% · 详情 ›</div></td></tr>';
   }).join('');
   const total = d.attendance.filter(a => currentStudents().some(s => s.id === a.studentId));
   const allP = total.filter(a => a.status === '出勤').length;
@@ -2108,10 +2110,11 @@ function analysisDetailModal(type) {
   else if (type === 'pass') items = list.filter(s => s.total >= total * 0.6);
   else if (type === 'fail') items = list.filter(s => s.total < total * 0.6);
   else if (type === 'good') items = list.filter(s => s.total >= total * 0.85);
-  else if (type === 'top') { const n = Math.max(1, Math.round(currentStudents().length * (d.settings.topPercent / 100))); items = sorted.slice(0, n); }
-  else if (type === 'crit') { const topN = Math.max(1, Math.round(currentStudents().length * (d.settings.topPercent / 100))); const critN = Math.max(1, Math.round(currentStudents().length * (d.settings.criticalPercent / 100))); items = sorted.slice(topN, critN); }
-  else if (type === 'weak') items = list.filter(s => { const st = getStudent(s.studentId); return st && ((st.warningTags || []).indexOf('学困生') >= 0 || (st.totalScore || 0) < total * 0.6); });
-  const labels = { ref: '参考学生名单', max: '最高分学生', min: '最低分学生', pass: '及格学生名单', fail: '不及格学生名单', good: '优秀学生名单', top: '尖子生名单', crit: '临界生名单', weak: '学困生名单' };
+
+  else if (type === 'top') items = tierTop(sorted);
+  else if (type === 'crit') items = tierCrit(sorted);
+  else if (type === 'weak') items = tierFail(list);
+  const labels = { ref: '参考学生名单', max: '最高分学生', min: '最低分学生', pass: '及格学生名单', fail: '不及格学生名单', good: '优秀学生名单', top: '尖子生名单', crit: '临界生名单', weak: '不及格生名单' };
   const rows = items.map(sc => {
     const st = getStudent(sc.studentId);
     return '<tr><td class="num">' + (sc.rank || '—') + '</td><td><div class="stu-cell">' + avatarHtml(st) + '<div><div class="stu-name">' + esc(st ? st.name : '未知') + '</div><div class="stu-no">' + esc(st ? st.no : '') + '</div></div></div></td><td class="num">' + sc.total + '</td></tr>';
@@ -2139,6 +2142,7 @@ function gradeClassScoresHtml() {
     const sc = byStu[st.id];
     if (!sc) return null;
     if (key === 'total') return sc.total;
+    if (key === 'rank') return sc.rank;
     if (key === 'main') return MAIN_SUBJECTS.reduce(function (a, nm) { const x = (sc.subjects || []).find(y => y.name === nm); return a + (x && x.score != null ? x.score : 0); }, 0);
     if (key === 'combo') { const cs = comboSubjectsOf(st); return cs ? cs.reduce(function (a, nm) { const x = (sc.subjects || []).find(y => y.name === nm); return a + (x && x.score != null ? x.score : 0); }, 0) : null; }
     if (key && key.indexOf('subj:') === 0) { const x = (sc.subjects || []).find(y => y.name === key.slice(5)); return x && x.score != null ? x.score : null; }
@@ -2159,10 +2163,9 @@ function gradeClassScoresHtml() {
   }
   const hasMain = exam.subjects.some(s => MAIN_SUBJECTS.indexOf(s.name) >= 0);
   const hasCombo = currentStudents().some(s => comboSubjectsOf(s));
-  const subjHead = exam.subjects.map(s => '<th class="center">' + esc(s.name) +
-    '<button type="button" class="subj-x" data-action="classRemoveSubject" data-id="' + selId + '" data-subject="' + esc(s.name) + '" title="删除该科目">×</button><br><small class="sortable" data-action="sortClassScores" data-key="subj:' + esc(s.name) + '" title="点击排序">' + s.full + '分' + classSortArrow('subj:' + s.name) + '</small></th>').join('');
-  const head = '<tr><th class="center">排名</th><th style="min-width:120px">学生</th>' + subjHead +
-    '<th class="center"><button type="button" class="btn btn-ico" data-action="classAddSubject" data-id="' + selId + '" title="添加科目">＋</button></th>' +
+  const subjHead = exam.subjects.map(s => '<th class="center">' + esc(s.name) + '<br><small class="sortable" data-action="sortClassScores" data-key="subj:' + esc(s.name) + '" title="点击排序">' + s.full + '分' + classSortArrow('subj:' + s.name) + '</small></th>').join('');
+  const head = '<tr><th class="center sortable" data-action="sortClassScores" data-key="rank" title="点击排序">排名' + classSortArrow('rank') + '</th><th style="min-width:120px">学生</th>' + subjHead +
+    '<th class="center"><button type="button" class="btn btn-ico" data-action="classAddSubject" data-id="' + selId + '" title="添加科目">＋</button><button type="button" class="btn btn-ico danger" data-action="openDeleteSubjectModal" data-id="' + selId + '" title="删除科目">－</button></th>' +
     (hasMain ? '<th class="center sortable" data-action="sortClassScores" data-key="main" title="点击排序">主科总分' + classSortArrow('main') + '</th>' : '') +
     (hasCombo ? '<th class="center sortable" data-action="sortClassScores" data-key="combo" title="点击排序">选科组合分' + classSortArrow('combo') + '</th>' : '') +
     '<th class="center sortable" data-action="sortClassScores" data-key="total" title="点击排序">总分' + classSortArrow('total') + '</th></tr>';
@@ -2185,7 +2188,8 @@ function gradeClassScoresHtml() {
     '<button class="btn small primary" data-action="setClassExam">加载</button>' +
     '<input id="classStuSearch" placeholder="🔍 搜索学生…" value="' + esc(state.classStuQuery || '') + '" style="border:1px solid var(--border);border-radius:10px;padding:8px 12px;min-width:150px">' +
     '<button class="btn small outline" data-action="exportExamCsv" data-id="' + selId + '">导出 CSV</button>' +
-    '<span class="hint" style="font-size:12px;color:var(--text3)">点科目/总分可排序；× 删科目，＋ 加科目</span>' +
+    (lastDeletedSubject && lastDeletedSubject.examId === selId ? '<button class="btn small outline" data-action="undoDeleteSubject">↩ 回退删除科目</button>' : '') +
+    '<span class="hint" style="font-size:12px;color:var(--text3)">点表头可排序；＋ 加科目，－ 删科目（可回退）</span>' +
     '</div>' +
     '<div class="table-wrap" style="max-height:66vh;overflow:auto"><table class="tbl ta-center"><thead>' + head + '</thead><tbody>' + (rows || '<tr><td colspan="' + colCount + '">' + emptyHtml('未找到学生') + '</td></tr>') + '</tbody></table></div></div>';
 }
@@ -2205,10 +2209,35 @@ function examRemoveSubject(examId, name) {
   const d = DB.data;
   const exam = d.exams.find(e => e.id === examId);
   if (!exam) return;
+  const sub = exam.subjects.find(s => s.name === name);
+  if (!sub) return;
+  const scores = [];
+  d.scores.forEach(sc => { if (sc.examId === examId) { const x = (sc.subjects || []).find(y => y.name === name); if (x && x.score != null) scores.push({ studentId: sc.studentId, score: x.score }); } });
+  lastDeletedSubject = { examId: examId, name: name, full: sub.full, scores: scores };
   exam.subjects = exam.subjects.filter(s => s.name !== name);
   Object.keys(scoreDraft).forEach(sid => { if (scoreDraft[sid]) delete scoreDraft[sid][name]; });
   d.scores.forEach(sc => { if (sc.examId === examId && sc.subjects) sc.subjects = sc.subjects.filter(x => x.name !== name); });
   DB.save();
+}
+function undoDeleteSubject() {
+  const d = DB.data;
+  const lb = lastDeletedSubject;
+  if (!lb) { toast('没有可回退的删除', 'err'); return; }
+  const exam = d.exams.find(e => e.id === lb.examId);
+  if (!exam) { lastDeletedSubject = null; return; }
+  if (!exam.subjects.some(s => s.name === lb.name)) exam.subjects.push({ name: lb.name, full: lb.full });
+  d.scores.forEach(sc => {
+    if (sc.examId === lb.examId) {
+      const bk = lb.scores.find(x => x.studentId === sc.studentId);
+      if (bk && !(sc.subjects || []).some(s => s.name === lb.name)) { sc.subjects = sc.subjects || []; sc.subjects.push({ name: lb.name, score: bk.score }); }
+      sc.total = (sc.subjects || []).reduce(function (a, x) { return a + (x.score != null ? x.score : 0); }, 0);
+    }
+  });
+  const list = d.scores.filter(s => s.examId === lb.examId).sort((a, b) => b.total - a.total);
+  list.forEach((s, i) => { s.rank = i + 1; });
+  lastDeletedSubject = null;
+  DB.save(); render();
+  toast('已回退删除的科目：' + lb.name);
 }
 function addExamSubject(examId) {
   const nmEl = document.getElementById('newSubjName');
@@ -2220,6 +2249,28 @@ function addExamSubject(examId) {
 function removeExamSubject(examId, name) {
   examRemoveSubject(examId, name);
   enterScoreModal(examId);
+}
+function openDeleteSubjectModal(examId) {
+  const d = DB.data;
+  const exam = d.exams.find(e => e.id === examId);
+  if (!exam) return;
+  if (!exam.subjects.length) { toast('没有可删除的科目', 'err'); return; }
+  const rows = exam.subjects.map(s => '<div class="list-line"><div class="ll-main"><div class="ll-title">' + esc(s.name) + ' · ' + s.full + '分</div></div><button class="btn small danger" data-action="confirmDeleteSubject" data-id="' + examId + '" data-subject="' + esc(s.name) + '">删除</button></div>').join('');
+  openModal(
+    '<div style="font-size:13px;color:var(--text2);margin-bottom:10px">选择要删除的科目（删除后可在成绩页点“↩ 回退删除”撤销）。</div>' +
+    (rows || emptyHtml('暂无科目', '📚')),
+    { title: '删除科目' }
+  );
+  const foot = modalFootHtml('<button class="btn outline" data-action="closeModal">取消</button>');
+  document.getElementById('modalBox').insertAdjacentHTML('beforeend', foot);
+}
+function confirmDeleteSubject(examId, name) {
+  confirmBox({
+    title: '删除科目',
+    message: '确定删除科目「' + name + '」吗？删除后可点“↩ 回退删除”撤销。',
+    okText: '删除', danger: true,
+    onOk: function () { examRemoveSubject(examId, name); if (document.querySelector('#modalBox .full-score-input')) enterScoreModal(examId); else render(); toast('科目已删除（可回退）'); }
+  });
 }
 function classAddSubject(examId) {
   openModal(
@@ -2257,6 +2308,51 @@ function comboSubjectsOf(stu) {
   const combo = d.subjectChoices && d.subjectChoices[stu.id];
   if (!combo) return null;
   return combo.split('').map(function (ch) { return COMBO_CHAR[ch]; }).filter(Boolean);
+}
+
+function tierLabel(key) {
+  const s = DB.data.settings;
+  if (key === 'top') return s.topMode === 'score' ? '≥ ' + (s.topScore || 0) + ' 分' : '前 ' + s.topPercent + '%';
+  if (key === 'crit') return s.criticalMode === 'score' ? '≥ ' + (s.criticalScore || 0) + ' 分' : '前 ' + s.criticalPercent + '%';
+  if (key === 'fail') return s.failMode === 'score' ? '< ' + (s.failScore || 0) + ' 分' : '后 ' + s.failPercent + '%';
+  return '';
+}
+function tierTop(sorted) {
+  const s = DB.data.settings;
+  if (s.topMode === 'score' && (s.topScore || 0) > 0) return sorted.filter(x => x.total >= s.topScore);
+  const n = Math.max(1, Math.round(currentStudents().length * ((s.topPercent || 20) / 100)));
+  return sorted.slice(0, n);
+}
+function tierCrit(sorted) {
+  const s = DB.data.settings;
+  if (s.criticalMode === 'score' && (s.criticalScore || 0) > 0) return sorted.filter(x => x.total >= s.criticalScore);
+  const topN = Math.max(1, Math.round(currentStudents().length * ((s.topPercent || 20) / 100)));
+  const critN = Math.max(1, Math.round(currentStudents().length * ((s.criticalPercent || 40) / 100)));
+  return sorted.slice(topN, critN);
+}
+function tierFail(list) {
+  const s = DB.data.settings;
+  if (s.failMode === 'score' && (s.failScore || 0) > 0) return list.filter(x => x.total < s.failScore);
+  const n = Math.max(1, Math.round(currentStudents().length * ((s.failPercent || 15) / 100)));
+  return list.slice().sort((a, b) => a.total - b.total).slice(0, n);
+}
+
+function attDetailModal(studentId) {
+  const d = DB.data;
+  const st = getStudent(studentId);
+  if (!st) return;
+  const recs = d.attendance.filter(a => a.studentId === studentId).sort((a, b) => a.date > b.date ? -1 : 1);
+  const p = recs.filter(a => a.status === '出勤').length;
+  const l = recs.filter(a => a.status === '迟到').length;
+  const ab = recs.filter(a => a.status === '缺勤').length;
+  const lv = recs.filter(a => a.status === '请假').length;
+  const badge = { '出勤': 'green', '迟到': 'amber', '缺勤': 'red', '请假': 'blue' };
+  const rows = recs.map(r => '<tr><td class="center">' + esc(r.date) + '</td><td class="center"><span class="badge ' + (badge[r.status] || 'gray') + '">' + esc(r.status) + '</span></td></tr>').join('') || '<tr><td colspan="2">' + emptyHtml('暂无考勤记录') + '</td></tr>';
+  openModal(
+    '<div style="font-size:13px;color:var(--text2);margin-bottom:10px">' + esc(st.name) + '（' + esc(st.no) + '）· 出勤 ' + p + ' · 迟到 ' + l + ' · 缺勤 ' + ab + ' · 请假 ' + lv + '</div>' +
+    '<div class="table-wrap" style="max-height:62vh;overflow:auto"><table class="tbl"><thead><tr><th>日期</th><th>状态</th></tr></thead><tbody>' + rows + '</tbody></table></div>',
+    { title: '考勤明细 · ' + st.name, wide: true }
+  );
 }
 /* ================= 模块：班级事务（6 页签） ================= */
 function renderAffairs() {
