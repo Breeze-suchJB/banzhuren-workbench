@@ -1,5 +1,5 @@
 /* 构建版本 */
-const APP_VERSION = '20260817-141905';
+const APP_VERSION = '20260817-144051';
 /* ================= 数据层 ================= */
 const STORAGE_KEY = 'banzhuren_workbench_v1';
 const DB_VERSION = 1;
@@ -1381,6 +1381,8 @@ function saveStudent(id) {
   const v = readFields();
   if (!v.name) { toast('请填写姓名', 'err'); return; }
   const d = DB.data;
+  const oldSt = id ? getStudent(id) : null;
+  const oldName = oldSt ? oldSt.name : '';
   const tags = [];
   const warns = [];
   document.querySelectorAll('#modalBox [data-chipgroup="tags"] .chip.on').forEach(el => tags.push(el.getAttribute('data-chip')));
@@ -1395,6 +1397,14 @@ function saveStudent(id) {
     const st = getStudent(id);
     Object.assign(st, payload);
     if (st.classId !== d.settings.currentClassId) st.classId = d.settings.currentClassId;
+    /* 姓名修改后同步到值日/教室值日等按姓名存储的位置 */
+    if (oldName && v.name && oldName !== v.name) {
+      (d.duties && d.duties.days || []).forEach(function (day) {
+        day.students = (day.students || []).map(function (n) { return n === oldName ? v.name : n; });
+      });
+      const rd = d.duties && d.duties.roomDuty;
+      if (rd && rd.days) rd.days.forEach(function (x) { if (x.name === oldName) x.name = v.name; });
+    }
     toast('学生信息已更新');
   } else {
     const cc = currentClass();
@@ -2469,7 +2479,30 @@ function seatCellHtml(cell, stuMap) {
   return '<div class="seat-cell ' + (st ? '' : 'empty') + '" data-action="setSeat" data-row="' + (cell ? cell.row : '') + '" data-col="' + (cell ? cell.col : '') + '" title="点击安排学生">' +
     (st ? '<div class="sc-name">' + esc(st.name) + '</div><div class="sc-no">' + esc(st.no) + '</div>' : '空') + '</div>';
 }
+function ensureSeatCapacity() {
+  const d = DB.data;
+  const seat = d.seat;
+  if (!seat) return;
+  const n = currentStudents().length;
+  const cols = seat.cols || 8, rows = seat.rows || 6;
+  let newRows = rows, newCols = cols;
+  while (newRows * newCols < n && newRows < 15) newRows++;
+  if (newRows * newCols < n) { newCols = Math.ceil(n / 12); newRows = Math.max(newRows, Math.ceil(n / newCols)); }
+  if (newRows !== rows || newCols !== cols) {
+    seat.rows = Math.min(20, newRows);
+    seat.cols = Math.min(15, newCols);
+    const kept = (seat.layout || []).filter(x => x.row < seat.rows && x.col < seat.cols);
+    for (let r = 0; r < seat.rows; r++) {
+      for (let c = 0; c < seat.cols; c++) {
+        if (!kept.some(x => x.row === r && x.col === c)) kept.push({ seatId: 'seat_' + r + '_' + c, row: r, col: c, studentId: '' });
+      }
+    }
+    seat.layout = kept.sort((a, b) => (a.row - b.row) || (a.col - b.col));
+    DB.save();
+  }
+}
 function affSeatHtml() {
+  ensureSeatCapacity();
   const d = DB.data;
   const seat = d.seat;
   const stuMap = {};
@@ -2508,8 +2541,18 @@ function randomSeats() {
       if (a) { (b ? twoSeat : oneSeat).push([a, b || null]); }
     }
   }
+  ensureSeatCapacity();
+  /* 重新读取扩容后的桌面 */
+  twoSeat.length = 0; oneSeat.length = 0;
+  for (let r = 0; r < (seat.rows || 6); r++) {
+    for (let c = 0; c < (seat.cols || 8); c += 2) {
+      const a = (seat.layout || []).find(x => x.row === r && x.col === c);
+      const b = (seat.layout || []).find(x => x.row === r && x.col === c + 1);
+      if (a) { (b ? twoSeat : oneSeat).push([a, b || null]); }
+    }
+  }
   const capacity = twoSeat.length * 2 + oneSeat.length;
-  if (stu.length > capacity) { toast('座位不够：当前 ' + stu.length + ' 人，座位仅 ' + capacity + ' 个，请先调整行列数', 'err'); return; }
+  if (stu.length > capacity) { toast('座位不足：请增大行列数', 'err'); return; }
   const boys = shuffleArr(stu.filter(s => s.gender === '男'));
   const girls = shuffleArr(stu.filter(s => s.gender === '女'));
   const pairs = [];
@@ -2522,8 +2565,9 @@ function randomSeats() {
   const onePairs = pairs.filter(p => p.length === 1);
   if (twoPairs.length > twoSeat.length) { toast('双人桌不够：请把“列数”设为偶数或增加行数', 'err'); return; }
   seat.layout.forEach(x => { x.studentId = ''; });
-  const twoOrder = shuffleArr(twoSeat);
-  const oneOrder = shuffleArr(oneSeat);
+  /* 前排优先：按行顺序填充，空位只会留在后排；学生配对已打乱保证随机 */
+  const twoOrder = twoSeat;
+  const oneOrder = oneSeat;
   let mixed = 0;
   twoPairs.forEach((pair, i) => {
     const desk = twoOrder[i];
@@ -2532,9 +2576,15 @@ function randomSeats() {
     desk[0].studentId = pair[0].id;
     if (desk[1]) desk[1].studentId = pair[1].id;
   });
+  let twoUsed = twoPairs.length;
   onePairs.forEach((pair, i) => {
     const desk = oneOrder[i];
-    if (desk) desk[0].studentId = pair[0].id;
+    if (desk) { desk[0].studentId = pair[0].id; }
+    else {
+      /* 无单座桌时，单座学生落入空双人桌（只占一个位） */
+      const free = twoOrder[twoUsed];
+      if (free) { free[0].studentId = pair[0].id; twoUsed++; }
+    }
   });
   DB.save(); render();
   toast(mixed ? '已随机分配：含 ' + mixed + ' 组男女同桌（性别不平衡），可点击桌位手动修改' : '已随机分配：同桌均为同性别，可点击桌位手动修改');
