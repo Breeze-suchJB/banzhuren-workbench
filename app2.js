@@ -1946,8 +1946,11 @@ const ACTIONS = {
   },
   editDuty: function () { dutyFormModal(); },
   saveDuty: function () { saveDuty(); },
+  rotateDuty: function () { rotateDuty(); },
+  autoRoomDuty: function () { autoRoomDuty(); },
   setSeat: function (el) { seatAssignModal(parseInt(el.dataset.row, 10), parseInt(el.dataset.col, 10)); },
   seatSettings: function () { seatSettingsModal(); },
+  randomSeats: function () { randomSeats(); },
   saveSeatSettings: function () { saveSeatSettings(); },
   clearSeats: function () {
     confirmBox({ title: '清空座位', message: '确定清空所有座位安排吗？', danger: true, okText: '清空', onOk: function () {

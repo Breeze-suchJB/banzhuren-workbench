@@ -1,5 +1,5 @@
 /* 构建版本 */
-const APP_VERSION = '20260817-112904';
+const APP_VERSION = '20260817-114641';
 /* ================= 数据层 ================= */
 const STORAGE_KEY = 'banzhuren_workbench_v1';
 const DB_VERSION = 1;
@@ -360,7 +360,14 @@ function demoData() {
       { day: '周三', students: curClass.slice(12, 18).map(s => s.name) },
       { day: '周四', students: curClass.slice(18, 24).map(s => s.name) },
       { day: '周五', students: curClass.slice(24, 30).map(s => s.name) }
-    ]
+    ],
+    roomDuty: { days: [
+      { day: '周一', name: '' },
+      { day: '周二', name: '' },
+      { day: '周三', name: '' },
+      { day: '周四', name: '' },
+      { day: '周五', name: '' }
+    ] }
   };
 
   /* 荣誉 */
@@ -510,6 +517,7 @@ const DB = {
     if (!out.schedule.periods) out.schedule.periods = [];
     if (!out.schedule.grid) out.schedule.grid = {};
     if (!out.duties || !out.duties.days) out.duties = { week: '第1周', days: [] };
+    if (!out.duties.roomDuty || !out.duties.roomDuty.days) out.duties.roomDuty = { days: (out.duties.days || []).map(x => ({ day: x.day || '', name: '' })) };
     if (!out.fiveEval || typeof out.fiveEval !== 'object') out.fiveEval = {};
     if (!out.subjectChoices || typeof out.subjectChoices !== 'object') out.subjectChoices = {};
     if (!out.safety || typeof out.safety !== 'object') out.safety = { physical: [], retention: [], safetyLedger: [], mental: [] };
@@ -1861,16 +1869,78 @@ function affDutyHtml() {
   const d = DB.data;
   const days = d.duties.days || [];
   const cols = days.map(day => '<td><div style="font-weight:700;margin-bottom:6px">' + esc(day.day) + '</div><div style="display:flex;flex-wrap:wrap;gap:4px">' + (day.students || []).map(n => '<span class="badge gray">' + esc(n) + '</span>').join('') + '</div></td>').join('');
+  const rdDays = (d.duties.roomDuty && d.duties.roomDuty.days) || [];
+  const rdCols = days.map((day, i) => {
+    const rd = rdDays[i];
+    const name = rd ? rd.name : '';
+    const overlap = !!name && (day.students || []).indexOf(name) >= 0;
+    return '<td class="center">' + (name
+      ? '<span class="badge ' + (overlap ? 'red' : 'primary') + '" title="' + (overlap ? '与当日值日小组重合' : '教室值日') + '">' + esc(name) + (overlap ? ' ⚠️' : '') + '</span>'
+      : '<span class="hint" style="font-size:12px">—</span>') + '</td>';
+  }).join('');
   return '<div class="card"><div class="card-title">🧹 每日值日安排 <span class="ct-sub">' + esc(d.duties.week || '') + '</span></div>' +
-    '<div class="table-wrap"><table class="tbl"><thead><tr><th style="width:120px">安排</th>' + days.map(x => '<th class="center">' + esc(x.day) + '</th>').join('') + '</tr></thead><tbody><tr><td style="font-weight:600">值日小组</td>' + cols + '</tr></tbody></table></div>' +
-    '<div class="btn-row" style="margin-top:12px"><button class="btn small primary" data-action="editDuty">编辑值日表</button></div></div>';
+    '<div class="table-wrap"><table class="tbl"><thead><tr><th style="width:120px">安排</th>' + days.map(x => '<th class="center">' + esc(x.day) + '</th>').join('') + '</tr></thead><tbody>' +
+    '<tr><td style="font-weight:600">值日小组</td>' + cols + '</tr>' +
+    '<tr><td style="font-weight:600">教室值日</td>' + rdCols + '</tr>' +
+    '</tbody></table></div>' +
+    '<div class="btn-row" style="margin-top:12px;flex-wrap:wrap">' +
+    '<button class="btn small primary" data-action="editDuty">编辑值日表</button>' +
+    '<button class="btn small primary" data-action="rotateDuty">🔁 一键轮换（整组顺延一天）</button>' +
+    '<button class="btn small primary" data-action="autoRoomDuty">✨ 一键生成教室值日（避开当日小组）</button>' +
+    '</div>' +
+    '<div style="margin-top:8px;font-size:12px;color:var(--text3)">教室值日：负责课室卫生（黑板擦、讲台等），单人；自动生成时尽量避开当天值日小组人员，可点击“编辑值日表”手动修改。</div></div>';
+}
+function rotateDuty() {
+  confirmBox({
+    title: '一键轮换值日',
+    message: '将每个“值日小组”整组顺延到下一天（周一→周二，…，周五→周一）？教室值日也会一起顺延。',
+    okText: '轮换',
+    onOk: function () {
+      const d = DB.data;
+      const days = d.duties.days || [];
+      if (!days.length) { toast('暂无值日安排', 'err'); return; }
+      const groups = days.map(x => (x.students || []).slice());
+      days.forEach((x, i) => { x.students = groups[(i + 1) % groups.length]; });
+      const rdDays = (d.duties.roomDuty && d.duties.roomDuty.days) || [];
+      if (rdDays.length) {
+        const rdNames = rdDays.map(x => x.name || '');
+        rdDays.forEach((x, i) => { x.name = rdNames[(i + 1) % rdNames.length]; });
+      }
+      DB.save(); render();
+      toast('值日已轮换（整组顺延一天）');
+    }
+  });
+}
+function autoRoomDuty() {
+  const d = DB.data;
+  const stu = currentStudents();
+  const days = d.duties.days || [];
+  if (!stu.length) { toast('当前班级暂无学生', 'err'); return; }
+  if (!days.length) { toast('请先设置值日表', 'err'); return; }
+  const used = new Set();
+  const result = days.map(day => {
+    const group = new Set(day.students || []);
+    const pool = stu.filter(s => !group.has(s.name) && !used.has(s.name));
+    const pick = pool.length ? pool[Math.floor(Math.random() * pool.length)] : null;
+    if (pick) { used.add(pick.name); return pick.name; }
+    const pool2 = stu.filter(s => !group.has(s.name));
+    const pick2 = pool2.length ? pool2[Math.floor(Math.random() * pool2.length)] : null;
+    if (pick2) { used.add(pick2.name); return pick2.name; }
+    return '';
+  });
+  d.duties.roomDuty = d.duties.roomDuty || { days: [] };
+  d.duties.roomDuty.days = days.map((day, i) => ({ day: day.day, name: result[i] }));
+  DB.save(); render();
+  toast('已生成教室值日（尽量避开当日小组）');
 }
 function dutyFormModal() {
   const d = DB.data;
+  const rdDays = (d.duties.roomDuty && d.duties.roomDuty.days) || [];
   openModal(
     '<div class="form-grid">' +
-    field('week', '周次', d.duties.week || '第15周', 'text') +
+    field('week', '周次', d.duties.week || '第1周', 'text') +
     (d.duties.days || []).map((day, i) => field('day_' + i, day.day + '（姓名用顿号分隔）', (day.students || []).join('、'), 'text', 'full')).join('') +
+    (d.duties.days || []).map((day, i) => field('room_' + i, '教室值日 · ' + day.day + '（单人）', (rdDays[i] && rdDays[i].name) || '', 'text', 'full')).join('') +
     '</div>',
     { title: '编辑值日表' }
   );
@@ -1885,30 +1955,98 @@ function saveDuty() {
     const txt = v['day_' + i] || '';
     day.students = txt.split(/[、,，]/).map(x => x.trim()).filter(Boolean);
   });
+  d.duties.roomDuty = d.duties.roomDuty || { days: [] };
+  (d.duties.days || []).forEach((day, i) => {
+    const nm = (v['room_' + i] || '').trim();
+    if (!d.duties.roomDuty.days[i]) d.duties.roomDuty.days[i] = { day: day.day, name: '' };
+    d.duties.roomDuty.days[i].name = nm;
+    d.duties.roomDuty.days[i].day = day.day;
+  });
   DB.save(); closeModal(); render();
   toast('值日表已更新');
 }
-
+function shuffleArr(arr) {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    const tmp = a[i]; a[i] = a[j]; a[j] = tmp;
+  }
+  return a;
+}
+function seatCellHtml(cell, stuMap) {
+  const st = cell && cell.studentId ? stuMap[cell.studentId] : null;
+  return '<div class="seat-cell ' + (st ? '' : 'empty') + '" data-action="setSeat" data-row="' + (cell ? cell.row : '') + '" data-col="' + (cell ? cell.col : '') + '" title="点击安排学生">' +
+    (st ? '<div class="sc-name">' + esc(st.name) + '</div><div class="sc-no">' + esc(st.no) + '</div>' : '空') + '</div>';
+}
 function affSeatHtml() {
   const d = DB.data;
   const seat = d.seat;
   const stuMap = {};
   currentStudents().forEach(s => { stuMap[s.id] = s; });
-  const cells = [];
+  const rowsHtml = [];
   for (let r = 0; r < (seat.rows || 6); r++) {
-    for (let c = 0; c < (seat.cols || 8); c++) {
-      const cell = (seat.layout || []).find(x => x.row === r && x.col === c);
-      const st = cell && cell.studentId ? stuMap[cell.studentId] : null;
-      cells.push('<div class="seat-cell ' + (st ? '' : 'empty') + '" data-action="setSeat" data-row="' + r + '" data-col="' + c + '" title="点击安排学生">' +
-        (st ? '<div class="sc-name">' + esc(st.name) + '</div><div class="sc-no">' + esc(st.no) + '</div>' : '空') + '</div>');
+    const desks = [];
+    for (let c = 0; c < (seat.cols || 8); c += 2) {
+      const a = (seat.layout || []).find(x => x.row === r && x.col === c);
+      const b = (seat.layout || []).find(x => x.row === r && x.col === c + 1);
+      if (!a) break;
+      desks.push('<div class="seat-desk">' + seatCellHtml(a, stuMap) + (b ? seatCellHtml(b, stuMap) : '') + '</div>');
+    }
+    rowsHtml.push('<div class="seat-row">' + desks.join('') + '</div>');
+  }
+  return '<div class="card"><div class="card-title">💺 座位表 <span class="ct-sub">两人一桌（同桌），点击桌位可自由修改</span></div>' +
+    (seat.stage === 'top' ? '<div class="seat-stage">讲 台</div>' : '') +
+    '<div class="seat-rows">' + rowsHtml.join('') + '</div>' +
+    (seat.stage !== 'top' ? '<div class="seat-stage" style="margin-top:12px">讲 台</div>' : '') +
+    '<div class="btn-row" style="margin-top:12px;flex-wrap:wrap">' +
+    '<button class="btn small primary" data-action="randomSeats">🎲 随机分配（同桌优先男男/女女）</button>' +
+    '<button class="btn small primary" data-action="seatSettings">座位设置</button>' +
+    '<button class="btn small danger" data-action="clearSeats">清空座位</button></div></div>';
+}
+function randomSeats() {
+  const d = DB.data;
+  const seat = d.seat;
+  const stu = currentStudents().slice();
+  if (!stu.length) { toast('当前班级暂无学生', 'err'); return; }
+  const twoSeat = [];
+  const oneSeat = [];
+  for (let r = 0; r < (seat.rows || 6); r++) {
+    for (let c = 0; c < (seat.cols || 8); c += 2) {
+      const a = (seat.layout || []).find(x => x.row === r && x.col === c);
+      const b = (seat.layout || []).find(x => x.row === r && x.col === c + 1);
+      if (a) { (b ? twoSeat : oneSeat).push([a, b || null]); }
     }
   }
-  const gridStyle = 'grid-template-columns:repeat(' + (seat.cols || 8) + ',1fr)';
-  return '<div class="card"><div class="card-title">💺 座位表 <span class="ct-sub">点击桌位安排学生</span></div>' +
-    (seat.stage === 'top' ? '<div class="seat-stage">讲 台</div>' : '') +
-    '<div class="seat-grid" style="' + gridStyle + '">' + cells.join('') + '</div>' +
-    (seat.stage !== 'top' ? '<div class="seat-stage" style="margin-top:12px">讲 台</div>' : '') +
-    '<div class="btn-row" style="margin-top:12px"><button class="btn small primary" data-action="seatSettings">座位设置</button><button class="btn small danger" data-action="clearSeats">清空座位</button></div></div>';
+  const capacity = twoSeat.length * 2 + oneSeat.length;
+  if (stu.length > capacity) { toast('座位不够：当前 ' + stu.length + ' 人，座位仅 ' + capacity + ' 个，请先调整行列数', 'err'); return; }
+  const boys = shuffleArr(stu.filter(s => s.gender === '男'));
+  const girls = shuffleArr(stu.filter(s => s.gender === '女'));
+  const pairs = [];
+  while (boys.length >= 2) pairs.push([boys.pop(), boys.pop()]);
+  while (girls.length >= 2) pairs.push([girls.pop(), girls.pop()]);
+  const rest = boys.concat(girls);
+  if (rest.length === 2) pairs.push([rest[0], rest[1]]);
+  else if (rest.length === 1) pairs.push([rest[0]]);
+  const twoPairs = pairs.filter(p => p.length === 2);
+  const onePairs = pairs.filter(p => p.length === 1);
+  if (twoPairs.length > twoSeat.length) { toast('双人桌不够：请把“列数”设为偶数或增加行数', 'err'); return; }
+  seat.layout.forEach(x => { x.studentId = ''; });
+  const twoOrder = shuffleArr(twoSeat);
+  const oneOrder = shuffleArr(oneSeat);
+  let mixed = 0;
+  twoPairs.forEach((pair, i) => {
+    const desk = twoOrder[i];
+    if (!desk) return;
+    if (pair[0].gender !== pair[1].gender) mixed++;
+    desk[0].studentId = pair[0].id;
+    if (desk[1]) desk[1].studentId = pair[1].id;
+  });
+  onePairs.forEach((pair, i) => {
+    const desk = oneOrder[i];
+    if (desk) desk[0].studentId = pair[0].id;
+  });
+  DB.save(); render();
+  toast(mixed ? '已随机分配：含 ' + mixed + ' 组男女同桌（性别不平衡），可点击桌位手动修改' : '已随机分配：同桌均为同性别，可点击桌位手动修改');
 }
 function seatSettingsModal() {
   const seat = DB.data.seat;
