@@ -1,7 +1,8 @@
 /* 构建版本 */
-const APP_VERSION = '20260817-154929';
+const APP_VERSION = '20260817-155914';
 /* ================= 数据层 ================= */
 const STORAGE_KEY = 'banzhuren_workbench_v1';
+const NO_DEMO_KEY = 'banzhuren_no_demo';
 const DB_VERSION = 1;
 
 /* 简单可复现随机数 */
@@ -495,6 +496,18 @@ function demoData() {
   };
 }
 
+function emptyData() {
+  const base = demoData();
+  ['students', 'exams', 'scores', 'attendance', 'leaves', 'points', 'violations', 'homeworks',
+   'contacts', 'notices', 'aids', 'todos', 'logs', 'talks', 'meetings', 'resources', 'recites',
+   'countdowns', 'honorsClass', 'honorsTeacher', 'activities', 'departures', 'customHolidays', 'career']
+    .forEach(k => { base[k] = []; });
+  base.fiveEval = {}; base.subjectChoices = {}; base.safety = { physical: [], retention: [], safetyLedger: [], mental: [] }; base.comments = {}; base.lessons = [];
+  if (base.duties) { base.duties.days = []; base.duties.roomDuty = { days: [] }; }
+  if (base.seat && base.seat.layout) base.seat.layout.forEach(x => { x.studentId = ''; });
+  return base;
+}
+
 /* ================= 存储与迁移 ================= */
 const DB = {
   data: null,
@@ -512,7 +525,9 @@ const DB = {
         this.data = this.normalize(demoData());
       }
     } else {
-      this.data = this.normalize(demoData());
+      /* 若用户执行过“彻底清除/清除现有数据”，不再自动生成演示数据 */
+      const noDemo = (function () { try { return localStorage.getItem(NO_DEMO_KEY) === '1'; } catch (e) { return false; } })();
+      this.data = this.normalize(noDemo ? emptyData() : demoData());
     }
     this.save();
   },
@@ -553,6 +568,7 @@ const DB = {
   },
   resetDemo() {
     this.data = demoData();
+    try { localStorage.removeItem(NO_DEMO_KEY); } catch (e) {}
     this.save();
   },
   clearBusinessData() {
@@ -564,6 +580,14 @@ const DB = {
     d.fiveEval = {}; d.subjectChoices = {}; d.safety = { physical: [], retention: [], safetyLedger: [], mental: [] }; d.comments = {}; d.lessons = [];
     if (d.duties) { d.duties.days = []; d.duties.roomDuty = { days: [] }; }
     if (d.seat && d.seat.layout) d.seat.layout.forEach(x => { x.studentId = ''; });
+    /* 清理本地同步备份，避免“残留” */
+    try {
+      const keys = [];
+      for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k && (k.indexOf('banzhuren_sync_backup_') === 0 || k.indexOf('banzhuren_sync_backup_remote_') === 0)) keys.push(k); }
+      keys.forEach(k => localStorage.removeItem(k));
+    } catch (e) {}
+    /* 标记：不再自动生成演示数据 */
+    try { localStorage.setItem(NO_DEMO_KEY, '1'); } catch (e) {}
     this.save();
   },
   clearAll() {

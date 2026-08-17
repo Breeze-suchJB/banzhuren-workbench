@@ -973,7 +973,7 @@ function renderDataMgr() {
     '<button class="btn outline" data-action="importJson">导入 JSON 恢复</button>' +
     '<button class="btn outline" data-action="exportStudents">导出学生 CSV</button></div></div>' +
     '<div class="risk-zone"><div class="rz-title">⚠️ 危险操作区</div><div style="font-size:12.5px;color:var(--text2);margin-bottom:10px">以下操作会清空或重置本地数据，请谨慎操作。</div>' +
-    '<div class="btn-row"><button class="btn danger" data-action="clearAllData">清除现有数据（保留班级与设置）</button><button class="btn danger" data-action="clearDemo">清空演示数据</button><button class="btn danger-solid" data-action="resetDemo">重新生成演示数据</button></div></div>';
+    '<div class="btn-row"><button class="btn danger-solid" data-action="wipeAll">🧹 彻底清除（本地+云端，不再自动生成演示）</button><button class="btn danger" data-action="clearAllData">清除现有数据（保留班级与设置）</button><button class="btn danger" data-action="clearDemo">清空演示数据</button><button class="btn danger-solid" data-action="resetDemo">重新生成演示数据</button></div></div>';
   const syncCard = (typeof syncCardHtml === 'function') ? syncCardHtml() : '';
   const ver = (typeof APP_VERSION !== 'undefined' && APP_VERSION) ? APP_VERSION : '?';
   return '<div class="page-title">💾 数据管理</div><div class="page-sub">数据总览、备份恢复与系统设置</div>' + overview +
@@ -2370,6 +2370,13 @@ const ACTIONS = {
   clearAllData: function () {
     confirmBox({ title: '清除现有数据', message: '将清除学生、成绩、考勤、积分、日志等全部业务数据（班级与系统设置、云同步配置保留），此操作不可恢复，请先导出备份！', danger: true, okText: '清除', onOk: function () {
       DB.clearBusinessData(); render(); toast('现有数据已清除（班级与设置保留）');
+    }});
+  },
+  wipeAll: function () {
+    confirmBox({ title: '彻底清除（本地 + 云端）', message: '将清除本地全部业务数据，并删除云端同步数据；之后打开/刷新不再自动生成演示数据（如需演示可点“重新生成演示数据”）。请先导出备份！', danger: true, okText: '彻底清除', onOk: function () {
+      DB.clearBusinessData();
+      if (typeof SyncEngine !== 'undefined' && SyncEngine.enabled()) { SyncEngine.clearCloud(); }
+      render(); toast('已彻底清除（本地+云端），不再自动生成演示数据');
     }});
   },
   clearDemo: function () {
