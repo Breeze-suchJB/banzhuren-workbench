@@ -2524,26 +2524,28 @@ function handleImportCsv(input) {
     confirmBox({ title: '导入学生', message: '将为当前班级导入 ' + data.length + ' 名学生，确定继续吗？', okText: '导入', onOk: function () {
       const d = DB.data;
       const cc = currentClass();
-      const idx = function (name, def) {
+      const idx = function (names, def) {
         if (!header) return def;
-        const i = header.indexOf(name);
-        return i >= 0 ? i : def;
+        for (let k = 0; k < names.length; k++) { const j = header.indexOf(names[k]); if (j >= 0) return j; }
+        return def;
       };
       data.forEach((r, i) => {
-        const name = r[idx('姓名', 1)] || ('新同学' + (i + 1));
-        const no = r[idx('学号', 0)] || String(d.students.filter(s => s.classId === cc.id).length + 1);
+        const name = r[idx(['姓名'], 1)] || ('新同学' + (i + 1));
+        const no = r[idx(['学号'], 0)] || String(d.students.filter(s => s.classId === cc.id).length + 1);
+        const p1 = r[idx(['家长1手机号', '手机号'], 3)] || '';
+        const p2 = r[idx(['家长2手机号'], 99)] || '';
         d.students.push({
           id: uid('s'), classId: cc ? cc.id : (d.classes[0] || {}).id,
           name: String(name).trim(), no: String(no).trim(),
-          gender: r[idx('性别', 2)] === '女' ? '女' : '男',
-          phone: r[idx('手机号', 3)] || '',
-          boarding: /是|住/.test(r[idx('住校', 4)] || ''),
-          position: r[idx('职务', 5)] || '', family: r[idx('家庭情况', 6)] || '正常',
-          parentName: r[idx('家长姓名', 7)] || '', guardian: r[idx('监护人', 8)] || '',
-          admitDate: r[idx('入学日期', 9)] || '2025-09-01', groupId: parseInt(r[idx('小组编号', 10)] || '1', 10) || 1,
+          gender: r[idx(['性别'], 2)] === '女' ? '女' : '男',
+          phone1: p1, phone: p1, parent2Name: r[idx(['家长2姓名'], 99)] || '', phone2: p2,
+          boarding: /是|住/.test(r[idx(['住校'], 4)] || ''),
+          position: r[idx(['职务'], 5)] || '', family: r[idx(['家庭情况'], 6)] || '正常',
+          parentName: r[idx(['家长1姓名', '家长姓名'], 7)] || '', guardian: r[idx(['监护人'], 8)] || '',
+          admitDate: r[idx(['入学日期'], 9)] || '2025-09-01', groupId: parseInt(r[idx(['小组编号'], 10)] || '1', 10) || 1,
           attendanceRate: 1, lateCount: 0, absentCount: 0, totalScore: 0, behaviorScore: 80, classRank: 0, score: 0,
-          warningTags: (r[idx('预警标签', 14)] || '').split(/[\/]/).map(x => x.trim()).filter(Boolean),
-          tags: (r[idx('标签', 15)] || '').split(/[\/]/).map(x => x.trim()).filter(Boolean)
+          warningTags: (r[idx(['预警标签'], 14)] || '').split(/[\/]/).map(x => x.trim()).filter(Boolean),
+          tags: (r[idx(['标签'], 15)] || '').split(/[\/]/).map(x => x.trim()).filter(Boolean)
         });
       });
       DB.save(); closeModal(); render(); toast('已导入 ' + data.length + ' 名学生');
