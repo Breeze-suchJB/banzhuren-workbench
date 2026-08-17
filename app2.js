@@ -269,12 +269,83 @@ function saveTodo(id) {
 function workLogHtml() {
   const d = DB.data;
   const rows = d.logs.slice().sort((a, b) => a.date > b.date ? -1 : 1).map(l =>
-    '<tr><td class="center">' + esc(l.date) + '</td><td>' + esc(l.content) + '</td><td class="num">' + l.hours + ' 小时</td>' +
+    '<tr><td class="center">' + esc(l.date) + '</td><td>' + esc(l.content) + '</td>' +
+    '<td class="log-thumbs-td">' + ((l.photos || []).map((p, i) =>
+      '<img class="log-thumb" src="' + esc(p.data) + '" data-action="viewLogPhoto" data-log-id="' + l.id + '" data-idx="' + i + '" title="查看留痕" alt="留痕">').join('') || '<span class="hint" style="font-size:12px">—</span>') + '</td>' +
+    '<td class="num">' + l.hours + ' 小时</td>' +
     '<td class="actions"><button class="btn btn-ico" data-action="editLog" data-id="' + l.id + '">✏️</button><button class="btn btn-ico danger" data-action="delLog" data-id="' + l.id + '">🗑️</button></td></tr>').join('');
   const total = d.logs.reduce((a, b) => a + (parseFloat(b.hours) || 0), 0);
   return '<div class="btn-row" style="margin-bottom:14px"><button class="btn primary" data-action="addLog">＋ 记录工作日志</button><span class="badge primary" style="margin-left:auto">累计 ' + d.logs.length + ' 条 · ' + total + ' 小时</span></div>' +
-    '<div class="card"><div class="card-title">📓 工作日志</div><div class="table-wrap"><table class="tbl"><thead><tr><th>日期</th><th>内容</th><th>时长</th><th>操作</th></tr></thead><tbody>' + (rows || '<tr><td colspan="4">' + emptyHtml('暂无日志') + '</td></tr>') + '</tbody></table></div></div>';
+    '<div class="card"><div class="card-title">📓 工作日志</div><div class="table-wrap"><table class="tbl"><thead><tr><th>日期</th><th>内容</th><th>留痕</th><th>时长</th><th>操作</th></tr></thead><tbody>' + (rows || '<tr><td colspan="5">' + emptyHtml('暂无日志') + '</td></tr>') + '</tbody></table></div></div>';
 }
+
+/* ---- 工作日志 · 工作留痕（拍照 / 上传截图） ---- */
+const LOG_PHOTO_LIMIT = 6;
+let logPhotosDraft = [];
+
+function compressImageFile(file, cb) {
+  const reader = new FileReader();
+  reader.onload = function (ev) {
+    const img = new Image();
+    img.onload = function () {
+      const MAX = 1280;
+      let w = img.width || 800, h = img.height || 600;
+      const scale = Math.min(1, MAX / Math.max(w, h));
+      if (scale < 1) { w = Math.round(w * scale); h = Math.round(h * scale); }
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      try {
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, w, h);
+        cb({ data: canvas.toDataURL('image/jpeg', 0.72), name: file.name || ('留痕-' + Date.now() + '.jpg'), ts: Date.now() });
+      } catch (e) { cb({ data: ev.target.result, name: file.name || 'photo.jpg', ts: Date.now() }); }
+    };
+    img.onerror = function () { cb({ data: ev.target.result, name: file.name || 'photo.jpg', ts: Date.now() }); };
+    img.src = ev.target.result;
+  };
+  reader.onerror = function () { cb(null); };
+  reader.readAsDataURL(file);
+}
+function logStorageGuard(addLen) {
+  try {
+    const used = (JSON.stringify(DB.data) || '').length + (addLen || 0);
+    if (used > 4200000) { toast('本地存储空间接近上限，请删除部分旧留痕或改用更小的图片', 'err'); return false; }
+    return true;
+  } catch (e) { return true; }
+}
+function addLogPhoto(file) {
+  if (logPhotosDraft.length >= LOG_PHOTO_LIMIT) { toast('每条日志最多 ' + LOG_PHOTO_LIMIT + ' 张留痕', 'err'); return; }
+  compressImageFile(file, function (p) {
+    if (!p) { toast('图片读取失败', 'err'); return; }
+    if (!logStorageGuard(p.data.length)) return;
+    logPhotosDraft.push(p);
+    renderLogPhotoPicker();
+  });
+}
+function renderLogPhotoPicker() {
+  const box = document.getElementById('logPhotoBox');
+  if (!box) return;
+  box.innerHTML = logPhotosDraft.map(function (p, i) {
+    return '<div class="log-thumb-wrap"><img class="log-thumb" src="' + esc(p.data) + '" data-action="viewLogPhoto" data-idx="' + i + '" alt="留痕">' +
+      '<button type="button" class="log-thumb-x" data-action="removeLogPhoto" data-idx="' + i + '" title="删除">×</button></div>';
+  }).join('') || '<span class="hint" style="font-size:12px;color:var(--text3)">暂无留痕图片（最多 ' + LOG_PHOTO_LIMIT + ' 张）</span>';
+}
+function removeLogPhoto(idx) {
+  if (idx >= 0 && idx < logPhotosDraft.length) logPhotosDraft.splice(idx, 1);
+  renderLogPhotoPicker();
+}
+function viewLogPhoto(logId, idx) {
+  let photos = logPhotosDraft;
+  if (logId) { const x = DB.data.logs.find(o => o.id === logId); photos = (x && x.photos) || []; }
+  const p = photos[idx];
+  if (!p) return;
+  openModal(
+    '<div class="log-viewer"><img src="' + esc(p.data) + '" alt="工作留痕">' +
+    '<div style="text-align:center;font-size:12px;color:var(--text3);margin-top:10px">' + esc(p.name || '留痕图片') + ' · ' + (idx + 1) + ' / ' + photos.length + '</div></div>',
+    { title: '📎 工作留痕' }
+  );
+}
+
 function logFormModal(l) {
   l = l || {};
   openModal(
@@ -282,19 +353,39 @@ function logFormModal(l) {
     field('date', '日期', l.date || todayStr(), 'date') +
     field('hours', '时长（小时）', l.hours || 1, 'number', 'min="0.5" step="0.5"') +
     field('content', '内容 *', l.content || '', 'textarea', 'full') +
+    '<div class="field full"><label>📎 工作留痕（拍照 / 上传截图）</label>' +
+    '<div class="log-photo-pick">' +
+    '<button type="button" class="btn small outline" id="logPhotoCameraBtn">📷 拍照</button>' +
+    '<button type="button" class="btn small outline" id="logPhotoGalleryBtn">🖼️ 上传截图/图片</button>' +
+    '<span class="hint" style="font-size:12px;color:var(--text3)">最多 ' + LOG_PHOTO_LIMIT + ' 张，自动压缩后保存</span>' +
+    '</div><div id="logPhotoBox" class="log-thumbs"></div>' +
+    '<input type="file" id="logPhotoCamera" accept="image/*" capture="environment" style="display:none">' +
+    '<input type="file" id="logPhotoGallery" accept="image/*" multiple style="display:none">' +
+    '</div>' +
     '</div>',
     { title: l.id ? '编辑日志' : '记录工作日志' }
   );
   const foot = modalFootHtml('<button class="btn primary" data-action="saveLog" data-id="' + (l.id || '') + '">保存</button>');
   document.getElementById('modalBox').insertAdjacentHTML('beforeend', foot);
+  logPhotosDraft = (l.photos || []).map(p => typeof p === 'string' ? { data: p, name: '留痕-' + Date.now() + '.jpg', ts: Date.now() } : Object.assign({}, p));
+  renderLogPhotoPicker();
+  const camBtn = document.getElementById('logPhotoCameraBtn');
+  const galBtn = document.getElementById('logPhotoGalleryBtn');
+  const camIn = document.getElementById('logPhotoCamera');
+  const galIn = document.getElementById('logPhotoGallery');
+  if (camBtn) camBtn.addEventListener('click', function () { camIn.click(); });
+  if (galBtn) galBtn.addEventListener('click', function () { galIn.click(); });
+  camIn.addEventListener('change', function () { if (camIn.files && camIn.files[0]) addLogPhoto(camIn.files[0]); camIn.value = ''; });
+  galIn.addEventListener('change', function () { const fs = galIn.files || []; for (let i = 0; i < fs.length; i++) addLogPhoto(fs[i]); galIn.value = ''; });
 }
 function saveLog(id) {
   const v = readFields();
   if (!v.content) { toast('请填写内容', 'err'); return; }
   const d = DB.data;
-  const payload = { date: v.date || todayStr(), content: v.content, hours: parseFloat(v.hours) || 0 };
+  const payload = { date: v.date || todayStr(), content: v.content, hours: parseFloat(v.hours) || 0, photos: logPhotosDraft.slice() };
   if (id) { const x = d.logs.find(o => o.id === id); if (x) Object.assign(x, payload); toast('日志已更新'); }
   else { d.logs.push(Object.assign({ id: uid('lg') }, payload)); toast('日志已记录'); }
+  logPhotosDraft = [];
   DB.save(); closeModal(); render();
 }
 function workTalkHtml() {
@@ -1997,6 +2088,8 @@ const ACTIONS = {
   addLog: function () { logFormModal(); },
   editLog: function (el) { const l = DB.data.logs.find(x => x.id === el.dataset.id); if (l) logFormModal(l); },
   saveLog: function (el) { saveLog(el.dataset.id); },
+  viewLogPhoto: function (el) { viewLogPhoto(el.dataset.logId || '', parseInt(el.dataset.idx || '0', 10)); },
+  removeLogPhoto: function (el) { removeLogPhoto(parseInt(el.dataset.idx || '0', 10)); },
   delLog: function (el) {
     confirmBox({ title: '删除日志', message: '确定删除这条工作日志吗？', danger: true, okText: '删除', onOk: function () {
       DB.data.logs = DB.data.logs.filter(x => x.id !== el.dataset.id);
