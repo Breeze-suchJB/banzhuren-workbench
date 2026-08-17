@@ -1878,6 +1878,11 @@ const ACTIONS = {
   subjectPreset: function (el) { fillSubjectPreset(el.dataset.type); },
   scheduleSubjectSettings: function () { scheduleSubjectSettingsModal(); },
   saveScheduleSubjects: function () { saveScheduleSubjects(); },
+  syncScheduleTeachers: function () { syncScheduleTeachers(); },
+  classAddSubject: function (el) { classAddSubject(el.dataset.id); },
+  saveClassAddSubject: function (el) { saveClassAddSubject(el.dataset.id); },
+  classRemoveSubject: function (el) { classRemoveSubject(el.dataset.id, el.dataset.subject); },
+  sortClassScores: function (el) { sortClassScores(el); },
   gradeTab: function (el) { state.gradeTab = el.dataset.tab; render(); },
   doCompare: function () {
     state.cmpA = document.getElementById('cmpA') ? document.getElementById('cmpA').value : '';
@@ -2620,6 +2625,8 @@ document.addEventListener('mouseup', function () {
   const b = d.settings.dashboard.blocks.find(x => x.id === __dashResize.id);
   if (b) { b.w = Math.round(__dashResize.w); b.h = Math.round(__dashResize.h); DB.save(); }
   __dashResize = null;
+  const pv = document.getElementById('dashLivePreview');
+  if (pv) pv.innerHTML = dashPreviewHtml();
 });
 
 document.addEventListener('click', function (e) {

@@ -1,5 +1,5 @@
 /* 构建版本 */
-const APP_VERSION = '20260817-134555';
+const APP_VERSION = '20260817-141905';
 /* ================= 数据层 ================= */
 const STORAGE_KEY = 'banzhuren_workbench_v1';
 const DB_VERSION = 1;
@@ -1229,8 +1229,9 @@ function renderDashboard() {
     const card = DASH_BLOCK_CARDS[b.id];
     if (!card) return '';
     const wNum = (typeof b.w === 'number') ? b.w : (b.w === 'half' ? 50 : 100);
+    const span = Math.max(3, Math.min(12, Math.round(wNum / 100 * 12)));
     const hPx = (typeof b.h === 'number' && b.h > 0) ? b.h : 0;
-    const st = (wNum >= 100 ? '' : 'flex:0 1 calc(' + wNum + '% - 16px);min-width:260px;') + (hPx ? 'min-height:' + hPx + 'px;' : '');
+    const st = 'grid-column:span ' + span + ';' + (hPx ? 'min-height:' + hPx + 'px;' : '');
     return '<div class="dash-card" style="' + st + '"><div class="card"><div class="card-title">' + card[0] + card[1] + '</div>' + (DASH_BLOCK_HTML[b.id] || '') + '</div></div>';
   }).join('');
   return '<div class="greet-row"><div class="greet">' + esc(s.teacherName) + '好，今天也要努力哟 💪<small>' + esc(today) + ' · ' + esc(cc ? cc.name : '') + '</small></div>' +
@@ -1504,8 +1505,10 @@ function dashEditOpen() {
       '<div class="dec-resize" title="拖动调整大小">⇲</div></div>';
   }).join('');
   openModal(
-    '<div style="font-size:13px;color:var(--text2);margin-bottom:10px">拖动卡片调整顺序与大小（实时保存），完成后点“保存并返回”。</div>' +
-    '<div class="dash-edit-grid">' + cards + '</div>',
+    '<div style="font-size:13px;color:var(--text2);margin-bottom:10px">拖动卡片调整顺序与大小（实时保存），下方实时预览；完成后点“保存并返回”。</div>' +
+    '<div class="dash-edit-grid">' + cards + '</div>' +
+    '<div style="margin-top:14px;font-weight:700;font-size:13px">👁️ 实时预览</div>' +
+    '<div id="dashLivePreview" style="margin-top:8px">' + dashPreviewHtml() + '</div>',
     { title: '⚙️ 仪表盘详情页 · 自定义布局', wide: true }
   );
   const foot = modalFootHtml('<button class="btn primary" data-action="dashEditSave">💾 保存并返回</button><button class="btn outline" data-action="closeModal">取消</button>');
@@ -1516,8 +1519,25 @@ function dashEditSave() {
   toast('仪表盘布局已保存');
   render();
 }
+
+function dashPreviewHtml() {
+  const d = DB.data;
+  const blocks = (d.settings.dashboard.blocks || []).filter(function (b) { return b.enabled !== false; });
+  const names = { stats: '📊 数据总览', alerts: '🚨 红线预警', quick: '⚡ 快捷操作', todo: '📌 今日待办', course: '📖 今日课程', points: '🏆 量化积分前五名', countdown: '⏳ 重要事项倒计时', notices: '📢 最新通知' };
+  const html = blocks.map(function (b) {
+    const wNum = (typeof b.w === 'number') ? b.w : (b.w === 'half' ? 50 : 100);
+    const span = Math.max(3, Math.min(12, Math.round(wNum / 100 * 12)));
+    const hPx = (typeof b.h === 'number' && b.h > 0) ? b.h : 0;
+    return '<div class="dash-card" style="grid-column:span ' + span + ';' + (hPx ? 'min-height:' + hPx + 'px;' : '') + '">' +
+      '<div class="card" style="height:100%"><div class="card-title">' + (names[b.id] || b.id) + '<span class="ct-sub">' + Math.round(wNum) + '% · ' + (hPx ? hPx + 'px' : '自动') + '</span></div>' +
+      '<div class="dash-preview-body">内容区域</div></div></div>';
+  }).join('');
+  return '<div class="dash-grid">' + html + '</div>';
+}
 /* ================= 模块：成绩管理 ================= */
 let scoreDraft = {};  /* 录入成绩草稿（切换科目增删时保留） */
+const MAIN_SUBJECTS = ['语文', '数学', '英语'];
+const COMBO_CHAR = { '物': '物理', '化': '化学', '生': '生物', '政': '政治', '史': '历史', '地': '地理' };
 function renderGrades() {
   const tab = state.gradeTab || 'entry';
   const tabs = [
@@ -1698,7 +1718,7 @@ function gradeCompareHtml() {
       '<td class="num" style="color:' + (rankDiff == null ? 'var(--text3)' : rankDiff > 0 ? 'var(--ok)' : rankDiff < 0 ? 'var(--danger)' : 'var(--text3)') + ';font-weight:700">' + (rankDiff == null ? '—' : (rankDiff > 0 ? '↑' : rankDiff < 0 ? '↓' : '—') + Math.abs(rankDiff)) + '</td></tr>';
   }).join('');
   return '<div class="card"><div class="card-title">成绩对比</div><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px">' + selectA + '<span>对比</span>' + selectB + '<button class="btn small primary" data-action="doCompare">对比</button></div>' +
-    '<div class="table-wrap"><table class="tbl"><thead><tr><th>学生</th><th>' + esc(a.name) + ' 总分</th><th>排名</th><th>对比考试总分</th><th>排名</th><th>总分差</th><th>名次变化</th></tr></thead><tbody>' + rows + '</tbody></table></div></div>';
+    '<div class="table-wrap"><table class="tbl ta-center"><thead><tr><th>学生</th><th>' + esc(a.name) + ' 总分</th><th>排名</th><th>对比考试总分</th><th>排名</th><th>总分差</th><th>名次变化</th></tr></thead><tbody>' + rows + '</tbody></table></div></div>';
 }
 function gradePersonalHtml() {
   const d = DB.data;
@@ -1712,13 +1732,29 @@ function gradePersonalHtml() {
     const sc = d.scores.find(s => s.examId === e.id && s.studentId === id);
     return { label: e.name, value: sc ? sc.total : 0 };
   }).filter(p => p.value > 0), { shortLabel: true }) : emptyHtml('请选择学生');
+  const allSubj = [];
+  exams.forEach(function (e) { (e.subjects || []).forEach(function (s) { if (allSubj.indexOf(s.name) < 0) allSubj.push(s.name); }); });
+  const subjCells = function (sc, subjNames) {
+    return subjNames.map(function (nm) {
+      const x = sc && (sc.subjects || []).find(y => y.name === nm);
+      const v = x && x.score != null ? x.score : '';
+      return '<td class="num' + (v === '' ? ' muted' : '') + '">' + (v === '' ? '—' : v) + '</td>';
+    }).join('');
+  };
   const rows = exams.map(e => {
     const sc = d.scores.find(s => s.examId === e.id && s.studentId === id);
-    return '<tr><td>' + esc(e.name) + '</td><td class="center">' + esc(e.date) + '</td><td class="num">' + (sc ? sc.total : '—') + '</td><td class="num">' + (sc ? sc.rank : '—') + '</td><td class="num">' + (sc && e.total ? Math.round((sc.total / e.total) * 1000) / 10 : '—') + '%</td></tr>';
+    const mainTotal = sc ? MAIN_SUBJECTS.reduce(function (a, nm) { const x = (sc.subjects || []).find(y => y.name === nm); return a + (x && x.score != null ? x.score : 0); }, 0) : 0;
+    const comboSubs = st ? comboSubjectsOf(st) : null;
+    const comboTotal = sc && comboSubs ? comboSubs.reduce(function (a, nm) { const x = (sc.subjects || []).find(y => y.name === nm); return a + (x && x.score != null ? x.score : 0); }, 0) : 0;
+    return '<tr><td>' + esc(e.name) + '</td><td class="center">' + esc(e.date) + '</td>' + subjCells(sc, allSubj) +
+      '<td class="num" style="font-weight:600">' + (sc && mainTotal > 0 ? mainTotal : '—') + '</td>' +
+      '<td class="num">' + (sc && comboSubs && comboTotal > 0 ? comboTotal : '—') + '</td>' +
+      '<td class="num" style="font-weight:700">' + (sc ? sc.total : '—') + '</td><td class="num">' + (sc ? sc.rank : '—') + '</td><td class="num">' + (sc && e.total ? Math.round((sc.total / e.total) * 1000) / 10 : '—') + '%</td></tr>';
   }).join('');
+  const headCells = '<th>考试</th><th>日期</th>' + allSubj.map(function (nm) { return '<th class="center">' + esc(nm) + '</th>'; }).join('') + '<th class="center">主科总分</th><th class="center">选科组合分</th><th class="center">总分</th><th class="center">班级排名</th><th class="center">得分率</th>';
   return '<div class="card"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px">' + sel + '<input id="personalSearch" placeholder="🔍 搜索学生…" style="border:1px solid var(--border);border-radius:10px;padding:8px 12px;min-width:150px">' + '<button class="btn small primary" data-action="setPersonalStu">查询</button><button class="btn small outline" data-action="genAnalysis" data-id="' + (st ? st.id : '') + '">生成学情分析</button></div>' +
     '<div class="chart-box">' + chart + '</div>' +
-    '<div class="table-wrap" style="margin-top:12px"><table class="tbl"><thead><tr><th>考试</th><th>日期</th><th>总分</th><th>班级排名</th><th>得分率</th></tr></thead><tbody>' + (rows || '<tr><td colspan="5">' + emptyHtml('暂无成绩') + '</td></tr>') + '</tbody></table></div></div>';
+    '<div class="table-wrap" style="margin-top:12px;overflow-x:auto"><table class="tbl ta-center"><thead><tr>' + headCells + '</tr></thead><tbody>' + (rows || '<tr><td colspan="' + (allSubj.length + 7) + '">' + emptyHtml('暂无成绩') + '</td></tr>') + '</tbody></table></div></div>';
 }
 function gradeAnalysisHtml() {
   const d = DB.data;
@@ -2087,39 +2123,75 @@ function gradeClassScoresHtml() {
   const byStu = {};
   d.scores.filter(s => s.examId === selId).forEach(s => { byStu[s.studentId] = s; });
   const q = (state.classStuQuery || '').toLowerCase();
-  const stu = currentStudents().filter(s => !q || s.name.toLowerCase().indexOf(q) >= 0 || String(s.no).indexOf(q) >= 0).sort((a, b) => ((byStu[a.id] && byStu[a.id].rank) || 999) - ((byStu[b.id] && byStu[b.id].rank) || 999));
-  const head = '<tr><th>排名</th><th style="min-width:120px">学生</th>' + exam.subjects.map(s => '<th>' + esc(s.name) + '<br><small style="font-weight:400">' + s.full + '分</small></th>').join('') + '<th>总分</th></tr>';
+  const ss = state.classSort || {};
+  let stu = currentStudents().filter(s => !q || s.name.toLowerCase().indexOf(q) >= 0 || String(s.no).indexOf(q) >= 0);
+  const valOf = function (st, key) {
+    const sc = byStu[st.id];
+    if (!sc) return null;
+    if (key === 'total') return sc.total;
+    if (key === 'main') return MAIN_SUBJECTS.reduce(function (a, nm) { const x = (sc.subjects || []).find(y => y.name === nm); return a + (x && x.score != null ? x.score : 0); }, 0);
+    if (key === 'combo') { const cs = comboSubjectsOf(st); return cs ? cs.reduce(function (a, nm) { const x = (sc.subjects || []).find(y => y.name === nm); return a + (x && x.score != null ? x.score : 0); }, 0) : null; }
+    if (key && key.indexOf('subj:') === 0) { const x = (sc.subjects || []).find(y => y.name === key.slice(5)); return x && x.score != null ? x.score : null; }
+    return null;
+  };
+  if (ss.key) {
+    const dir = ss.dir;
+    stu = stu.slice().sort(function (a, b) {
+      const va = valOf(a, ss.key), vb = valOf(b, ss.key);
+      const na = (va == null) ? null : va, nb = (vb == null) ? null : vb;
+      if (na == null && nb == null) return 0;
+      if (na == null) return 1;
+      if (nb == null) return -1;
+      return (na - nb) * dir;
+    });
+  } else {
+    stu = stu.sort((a, b) => ((byStu[a.id] && byStu[a.id].rank) || 999) - ((byStu[b.id] && byStu[b.id].rank) || 999));
+  }
+  const hasMain = exam.subjects.some(s => MAIN_SUBJECTS.indexOf(s.name) >= 0);
+  const hasCombo = currentStudents().some(s => comboSubjectsOf(s));
+  const subjHead = exam.subjects.map(s => '<th class="center">' + esc(s.name) +
+    '<button type="button" class="subj-x" data-action="classRemoveSubject" data-id="' + selId + '" data-subject="' + esc(s.name) + '" title="删除该科目">×</button><br><small class="sortable" data-action="sortClassScores" data-key="subj:' + esc(s.name) + '" title="点击排序">' + s.full + '分' + classSortArrow('subj:' + s.name) + '</small></th>').join('');
+  const head = '<tr><th class="center">排名</th><th style="min-width:120px">学生</th>' + subjHead +
+    '<th class="center"><button type="button" class="btn btn-ico" data-action="classAddSubject" data-id="' + selId + '" title="添加科目">＋</button></th>' +
+    (hasMain ? '<th class="center sortable" data-action="sortClassScores" data-key="main" title="点击排序">主科总分' + classSortArrow('main') + '</th>' : '') +
+    (hasCombo ? '<th class="center sortable" data-action="sortClassScores" data-key="combo" title="点击排序">选科组合分' + classSortArrow('combo') + '</th>' : '') +
+    '<th class="center sortable" data-action="sortClassScores" data-key="total" title="点击排序">总分' + classSortArrow('total') + '</th></tr>';
   const rows = stu.map(st => {
     const sc = byStu[st.id];
+    const mainTotal = sc ? MAIN_SUBJECTS.reduce(function (a, nm) { const x = (sc.subjects || []).find(y => y.name === nm); return a + (x && x.score != null ? x.score : 0); }, 0) : 0;
+    const comboSubs = comboSubjectsOf(st);
+    const comboTotal = sc && comboSubs ? comboSubs.reduce(function (a, nm) { const x = (sc.subjects || []).find(y => y.name === nm); return a + (x && x.score != null ? x.score : 0); }, 0) : 0;
     return '<tr><td class="num">' + (sc ? sc.rank : '—') + '</td><td><div class="stu-cell">' + avatarHtml(st) + '<div><div class="stu-name">' + esc(st.name) + '</div><div class="stu-no">' + esc(st.no) + '</div></div></div></td>' +
       exam.subjects.map(sub => { const x = sc && (sc.subjects || []).find(y => y.name === sub.name); const val = x && x.score != null ? x.score : ''; return '<td class="num' + (val === '' ? ' muted' : '') + '">' + (val === '' ? '—' : val) + '</td>'; }).join('') +
+      '<td class="center"></td>' +
+      (hasMain ? '<td class="num" style="font-weight:600">' + (sc && mainTotal > 0 ? mainTotal : '—') + '</td>' : '') +
+      (hasCombo ? '<td class="num">' + (sc && comboSubs && comboTotal > 0 ? comboTotal + '<small style="color:var(--text3)">(' + esc(comboSubs.join('+')) + ')</small>' : '—') + '</td>' : '') +
       '<td class="num" style="font-weight:700">' + (sc ? sc.total : '—') + '</td></tr>';
   }).join('');
   const sel = '<select id="classExamSel" style="border:1px solid var(--border);border-radius:10px;padding:8px 12px;min-width:200px">' + exams.map(e => '<option value="' + e.id + '"' + (e.id === selId ? ' selected' : '') + '>' + esc(e.name) + '</option>').join('') + '</select>';
+  const colCount = exam.subjects.length + 2 + (hasMain ? 1 : 0) + (hasCombo ? 1 : 0) + 1;
   return '<div class="card"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px">' +
     '<span class="badge primary">📝 考试</span>' + sel +
     '<button class="btn small primary" data-action="setClassExam">加载</button>' +
     '<input id="classStuSearch" placeholder="🔍 搜索学生…" value="' + esc(state.classStuQuery || '') + '" style="border:1px solid var(--border);border-radius:10px;padding:8px 12px;min-width:150px">' +
     '<button class="btn small outline" data-action="exportExamCsv" data-id="' + selId + '">导出 CSV</button>' +
+    '<span class="hint" style="font-size:12px;color:var(--text3)">点科目/总分可排序；× 删科目，＋ 加科目</span>' +
     '</div>' +
-    '<div class="table-wrap" style="max-height:66vh;overflow:auto"><table class="tbl"><thead>' + head + '</thead><tbody>' + (rows || '<tr><td colspan="' + (exam.subjects.length + 3) + '">' + emptyHtml('未找到学生') + '</td></tr>') + '</tbody></table></div></div>';
+    '<div class="table-wrap" style="max-height:66vh;overflow:auto"><table class="tbl ta-center"><thead>' + head + '</thead><tbody>' + (rows || '<tr><td colspan="' + colCount + '">' + emptyHtml('未找到学生') + '</td></tr>') + '</tbody></table></div></div>';
 }
 
-function addExamSubject(examId) {
+function examAddSubject(examId, nm, full) {
   const d = DB.data;
   const exam = d.exams.find(e => e.id === examId);
-  if (!exam) return;
-  const nmEl = document.getElementById('newSubjName');
-  const fullEl = document.getElementById('newSubjFull');
-  const nm = (nmEl ? nmEl.value : '').trim();
-  if (!nm) { toast('请输入科目名', 'err'); return; }
-  if (exam.subjects.some(s => s.name === nm)) { toast('该科目已存在', 'err'); return; }
-  const full = parseInt(fullEl ? fullEl.value : '100', 10) || 100;
-  exam.subjects.push({ name: nm, full: full });
+  if (!exam) return false;
+  nm = String(nm || '').trim();
+  if (!nm) { toast('请输入科目名', 'err'); return false; }
+  if (exam.subjects.some(s => s.name === nm)) { toast('该科目已存在', 'err'); return false; }
+  exam.subjects.push({ name: nm, full: parseInt(full, 10) || 100 });
   DB.save();
-  enterScoreModal(examId);
+  return true;
 }
-function removeExamSubject(examId, name) {
+function examRemoveSubject(examId, name) {
   const d = DB.data;
   const exam = d.exams.find(e => e.id === examId);
   if (!exam) return;
@@ -2127,7 +2199,54 @@ function removeExamSubject(examId, name) {
   Object.keys(scoreDraft).forEach(sid => { if (scoreDraft[sid]) delete scoreDraft[sid][name]; });
   d.scores.forEach(sc => { if (sc.examId === examId && sc.subjects) sc.subjects = sc.subjects.filter(x => x.name !== name); });
   DB.save();
+}
+function addExamSubject(examId) {
+  const nmEl = document.getElementById('newSubjName');
+  const fullEl = document.getElementById('newSubjFull');
+  const nm = nmEl ? nmEl.value : '';
+  const full = parseInt(fullEl ? fullEl.value : '100', 10) || 100;
+  if (examAddSubject(examId, nm, full)) enterScoreModal(examId);
+}
+function removeExamSubject(examId, name) {
+  examRemoveSubject(examId, name);
   enterScoreModal(examId);
+}
+function classAddSubject(examId) {
+  openModal(
+    '<div class="form-grid">' +
+    field('clsNewName', '科目名 *', '', 'text') +
+    field('clsNewFull', '满分', 100, 'number', 'min="1" max="500"') +
+    '</div>',
+    { title: '为本次考试添加科目' }
+  );
+  const foot = modalFootHtml('<button class="btn primary" data-action="saveClassAddSubject" data-id="' + examId + '">添加</button>');
+  document.getElementById('modalBox').insertAdjacentHTML('beforeend', foot);
+}
+function saveClassAddSubject(examId) {
+  const v = readFields();
+  if (examAddSubject(examId, v.clsNewName, v.clsNewFull)) { closeModal(); render(); toast('科目已添加'); }
+}
+function classRemoveSubject(examId, name) {
+  examRemoveSubject(examId, name);
+  render();
+  toast('科目已删除');
+}
+function sortClassScores(el) {
+  const k = el.dataset.key;
+  const ss = state.classSort = state.classSort || { key: '', dir: 1 };
+  if (ss.key === k) ss.dir = -ss.dir; else { ss.key = k; ss.dir = 1; }
+  render();
+}
+function classSortArrow(key) {
+  const ss = state.classSort || {};
+  if (ss.key === key) return ss.dir === 1 ? ' ▲' : ' ▼';
+  return ' ⇅';
+}
+function comboSubjectsOf(stu) {
+  const d = DB.data;
+  const combo = d.subjectChoices && d.subjectChoices[stu.id];
+  if (!combo) return null;
+  return combo.split('').map(function (ch) { return COMBO_CHAR[ch]; }).filter(Boolean);
 }
 /* ================= 模块：班级事务（6 页签） ================= */
 function renderAffairs() {
@@ -2492,7 +2611,7 @@ function affScheduleHtml() {
     return '<tr><td><div style="font-weight:700">' + esc(p.name) + '</div><div class="period">' + esc(p.start) + ' - ' + esc(p.end) + '</div></td>' + tds +
       '<td class="actions"><button class="btn btn-ico" data-action="editPeriod" data-id="' + i + '">✏️</button><button class="btn btn-ico danger" data-action="delPeriod" data-id="' + i + '">🗑️</button></td></tr>';
   }).join('');
-  return '<div class="btn-row" style="margin-bottom:14px"><button class="btn primary small" data-action="addPeriod">＋ 添加节次</button><button class="btn small outline" data-action="scheduleSubjectSettings">📚 科目设置</button></div>' +
+  return '<div class="btn-row" style="margin-bottom:14px"><button class="btn primary small" data-action="addPeriod">＋ 添加节次</button><button class="btn small outline" data-action="scheduleSubjectSettings">📚 科目设置</button><button class="btn small outline" data-action="syncScheduleTeachers">🔄 按班级角色同步教师</button></div>' +
     '<div class="card"><div class="card-title">📖 课程表 <span class="ct-sub">点击课程格设置科目与教师</span></div>' +
     '<div class="table-wrap"><table class="schedule-table"><thead><tr>' + head + '</tr></thead><tbody>' + rows + '</tbody></table></div></div>';
 }
@@ -2542,7 +2661,7 @@ function saveCell(day, per) {
   const v = readFields();
   const d = DB.data;
   if (!d.schedule.grid[day]) d.schedule.grid[day] = [];
-  d.schedule.grid[day][per] = { subject: v.subject, teacher: v.teacher };
+  d.schedule.grid[day][per] = { subject: v.subject, teacher: v.teacher, teacherManual: !!(v.teacher && v.teacher.trim()) };
   DB.save(); closeModal(); render();
   toast('课程已设置');
 }
@@ -2757,4 +2876,28 @@ function viewActivityPhoto(actId, idx) {
     '<div style="text-align:center;font-size:12px;color:var(--text3);margin-top:10px">' + esc(p.name || '留痕图片') + ' · ' + (idx + 1) + ' / ' + photos.length + '</div></div>',
     { title: '📎 活动留痕' }
   );
+}
+
+function syncScheduleTeachers() {
+  const d = DB.data;
+  const cc = currentClass();
+  const roleMap = {};
+  ((cc && cc.roles) || []).forEach(function (r) {
+    const parts = String(r).split(/[:：]/);
+    if (parts.length >= 2 && parts[0].trim() && parts[1].trim()) roleMap[parts[0].trim()] = parts[1].trim();
+  });
+  if (!Object.keys(roleMap).length) { toast('当前班级暂无角色/任课教师信息', 'err'); return; }
+  let changed = 0;
+  Object.keys(d.schedule.grid || {}).forEach(function (day) {
+    (d.schedule.grid[day] || []).forEach(function (cell) {
+      if (!cell || !cell.subject) return;
+      const t = roleMap[cell.subject];
+      if (!t) return;
+      if (cell.teacherManual) return;  /* 课表手动修改的教师优先 */
+      if (cell.teacher !== t) { cell.teacher = t; changed++; }
+      delete cell.teacherManual;
+    });
+  });
+  DB.save(); render();
+  toast('已按班级角色同步任课教师（课表手动修改的教师保留）· 更新 ' + changed + ' 格');
 }
