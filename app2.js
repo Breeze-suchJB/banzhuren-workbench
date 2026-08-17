@@ -953,11 +953,16 @@ function renderDataMgr() {
     '<div class="field"><label>主题配色</label><select data-field="theme">' + themeOpts + '</select></div>' +
     '<div class="field"><label>评语权重（教师占比 %）</label><input type="number" data-field="commentTeacherWeight" min="0" max="100" value="' + Math.round((d.settings.commentTeacherWeight || 0.7) * 100) + '"></div>' +
     '<div class="field"><label>尖子生 划线方式</label><select data-field="topMode"><option value="pct"' + (d.settings.topMode !== 'score' ? ' selected' : '') + '>按百分位</option><option value="score"' + (d.settings.topMode === 'score' ? ' selected' : '') + '>按具体分数</option></select></div>' +
-    '<div class="field"><label>尖子生 ' + (d.settings.topMode === 'score' ? '分数线（分）' : '百分位 %') + '</label><input type="number" data-field="topValue" min="1" max="' + (d.settings.topMode === 'score' ? '9999' : '50') + '" value="' + esc(d.settings.topMode === 'score' ? (d.settings.topScore || 0) : d.settings.topPercent) + '"></div>' +
+    '<div class="field"><label>尖子生 百分位 %</label><input type="number" data-field="topPercent" min="1" max="50" value="' + esc(d.settings.topPercent) + '"></div>' +
+    '<div class="field"><label>尖子生 分数线（≥此分）</label><input type="number" data-field="topScore" min="0" max="9999" value="' + esc(d.settings.topScore || 0) + '"></div>' +
     '<div class="field"><label>临界生 划线方式</label><select data-field="criticalMode"><option value="pct"' + (d.settings.criticalMode !== 'score' ? ' selected' : '') + '>按百分位</option><option value="score"' + (d.settings.criticalMode === 'score' ? ' selected' : '') + '>按具体分数</option></select></div>' +
-    '<div class="field"><label>临界生 ' + (d.settings.criticalMode === 'score' ? '分数线（分）' : '百分位 %') + '</label><input type="number" data-field="criticalValue" min="1" max="' + (d.settings.criticalMode === 'score' ? '9999' : '90') + '" value="' + esc(d.settings.criticalMode === 'score' ? (d.settings.criticalScore || 0) : d.settings.criticalPercent) + '"></div>' +
+    '<div class="field"><label>临界生 百分位 %</label><input type="number" data-field="criticalPercent" min="1" max="90" value="' + esc(d.settings.criticalPercent) + '"></div>' +
+    '<div class="field"><label>临界生 分数线低线（≥）</label><input type="number" data-field="criticalScore" min="0" max="9999" value="' + esc(d.settings.criticalScore || 0) + '"></div>' +
+    '<div class="field"><label>临界生 分数线上限（&lt;，可选）</label><input type="number" data-field="criticalScoreHigh" min="0" max="9999" value="' + esc(d.settings.criticalScoreHigh || 0) + '"></div>' +
     '<div class="field"><label>不及格生 划线方式</label><select data-field="failMode"><option value="pct"' + (d.settings.failMode !== 'score' ? ' selected' : '') + '>按百分位</option><option value="score"' + (d.settings.failMode === 'score' ? ' selected' : '') + '>按具体分数</option></select></div>' +
-    '<div class="field"><label>不及格生 ' + (d.settings.failMode === 'score' ? '分数线（低于此分）' : '百分位（后 %）') + '</label><input type="number" data-field="failValue" min="1" max="' + (d.settings.failMode === 'score' ? '9999' : '90') + '" value="' + esc(d.settings.failMode === 'score' ? (d.settings.failScore || 0) : d.settings.failPercent) + '"></div>' +
+    '<div class="field"><label>不及格生 百分位（后 %）</label><input type="number" data-field="failPercent" min="1" max="90" value="' + esc(d.settings.failPercent) + '"></div>' +
+    '<div class="field"><label>不及格生 分数线（&lt;此分）</label><input type="number" data-field="failScore" min="0" max="9999" value="' + esc(d.settings.failScore || 0) + '"></div>' +
+    '<div class="field full" style="font-size:12px;color:var(--text3)">划线方式选“按百分位”时使用各百分位；选“按具体分数”时使用分数线（例：尖子生≥720，临界生 650~700，不及格生&lt;500）。</div>' +
     field('tagLibrary', '学生标签库（逗号分隔）', d.settings.tagLibrary.join(','), 'text', 'full') +
     field('subjectColors', '科目配色（每行一条"科目,颜色"）', subjectRows, 'textarea', 'full') +
     '<div class="field"><label class="hint" style="font-size:13px"><input type="checkbox" data-field="maskPhone" ' + (d.settings.maskPhone ? 'checked' : '') + '> 手机号脱敏</label></div>' +
@@ -988,14 +993,15 @@ function saveSettings() {
   if (v.theme) d.settings.theme = v.theme;
   d.settings.commentTeacherWeight = Math.min(1, Math.max(0, (parseInt(v.commentTeacherWeight, 10) || 70) / 100));
   d.settings.topMode = v.topMode === 'score' ? 'score' : 'pct';
-  if (d.settings.topMode === 'score') d.settings.topScore = Math.max(0, parseInt(v.topValue, 10) || 0);
-  else d.settings.topPercent = Math.min(50, Math.max(1, parseInt(v.topValue, 10) || 20));
+  d.settings.topPercent = Math.min(50, Math.max(1, parseInt(v.topPercent, 10) || 20));
+  d.settings.topScore = Math.max(0, parseInt(v.topScore, 10) || 0);
   d.settings.criticalMode = v.criticalMode === 'score' ? 'score' : 'pct';
-  if (d.settings.criticalMode === 'score') d.settings.criticalScore = Math.max(0, parseInt(v.criticalValue, 10) || 0);
-  else d.settings.criticalPercent = Math.min(90, Math.max(1, parseInt(v.criticalValue, 10) || 40));
+  d.settings.criticalPercent = Math.min(90, Math.max(1, parseInt(v.criticalPercent, 10) || 40));
+  d.settings.criticalScore = Math.max(0, parseInt(v.criticalScore, 10) || 0);
+  d.settings.criticalScoreHigh = Math.max(0, parseInt(v.criticalScoreHigh, 10) || 0);
   d.settings.failMode = v.failMode === 'score' ? 'score' : 'pct';
-  if (d.settings.failMode === 'score') d.settings.failScore = Math.max(0, parseInt(v.failValue, 10) || 0);
-  else d.settings.failPercent = Math.min(90, Math.max(1, parseInt(v.failValue, 10) || 15));
+  d.settings.failPercent = Math.min(90, Math.max(1, parseInt(v.failPercent, 10) || 15));
+  d.settings.failScore = Math.max(0, parseInt(v.failScore, 10) || 0);
   d.settings.maskPhone = !!v.maskPhone;
   d.settings.showClock = !!v.showClock;
   d.settings.tagLibrary = (v.tagLibrary || '').split(/[,，]/).map(x => x.trim()).filter(Boolean);
@@ -1351,6 +1357,20 @@ const SyncEngine = {
       this._busy = false;
     }
   },
+  clearCloud: async function () {
+    if (!this.enabled()) { toast('当前未启用云同步，无法清除云端数据', 'err'); return; }
+    try {
+      await this.driver().deleteRemote();
+      const s = this.settings();
+      s.rev = 0; s.updatedAt = ''; s.lastSyncAt = ''; s.lastError = '';
+      this._dirty = false; this._driverCache = null;
+      this._saveMeta();
+      this._setStatus('云端数据已清除', 'green');
+      toast('云端数据已清除（本地保留；若本地是演示数据请先清空本地再同步）');
+    } catch (e) {
+      toast('清除云端数据失败：' + (e.message || e), 'err');
+    }
+  },
   disconnect: function () {
     const s = this.settings();
     s.provider = ''; s.appId = ''; s.appKey = ''; s.wdUrl = ''; s.wdUser = ''; s.wdPass = '';
@@ -1419,6 +1439,7 @@ const SyncEngine = {
       '<button class="btn primary" data-action="saveSync">保存并立即同步</button>' +
       '<button class="btn outline" data-action="syncPull">立即拉取</button>' +
       '<button class="btn danger" data-action="syncDisconnect">断开云同步</button>' +
+      '<button class="btn danger-solid" data-action="clearCloudData">🗑 清除云端数据</button>' +
       '</div>' +
       '<div style="margin-top:12px;font-size:12px;color:var(--text3);line-height:1.9">' +
       '<b>冲突规则：</b>多台设备同时编辑时以“最后保存的版本”为准；覆盖前会自动在浏览器里备份一份（banzhuren_sync_backup_*），不会丢数据。<br>' +
@@ -1482,6 +1503,12 @@ function makeLeanCloudDriver() {
       const body = { syncKey: meta.syncKey, rev: meta.rev, updatedAt: meta.updatedAt, deviceId: meta.deviceId, checksum: meta.checksum, size: meta.size, enc: meta.enc };
       if (metaObjId) { await req('PUT', 'WorkbenchSyncMeta/' + metaObjId, body); }
       else { const created = await req('POST', 'WorkbenchSyncMeta', body); metaObjId = created.objectId; }
+    },
+    deleteRemote: async function () {
+      const chunks = (await req('GET', 'WorkbenchSyncChunk?where=' + where + '&limit=1000')) || { results: [] };
+      for (let i = 0; i < (chunks.results || []).length; i++) { try { await req('DELETE', 'WorkbenchSyncChunk/' + chunks.results[i].objectId); } catch (e) {} }
+      const metas = (await req('GET', 'WorkbenchSyncMeta?where=' + where + '&limit=1000')) || { results: [] };
+      for (let i = 0; i < (metas.results || []).length; i++) { try { await req('DELETE', 'WorkbenchSyncMeta/' + metas.results[i].objectId); } catch (e) {} }
     }
   };
 }
@@ -1525,6 +1552,9 @@ function makeWebDAVDriver() {
     },
     push: async function (payload, meta) {
       await req('PUT', { syncKey: meta.syncKey, rev: meta.rev, updatedAt: meta.updatedAt, deviceId: meta.deviceId, checksum: meta.checksum, size: meta.size, enc: meta.enc, payload: payload });
+    },
+    deleteRemote: async function () {
+      await req('PUT', { syncKey: 'main', rev: 0, updatedAt: '', deviceId: '', checksum: '', size: 0, enc: 'none', payload: '' });
     }
   };
 }
@@ -1569,6 +1599,9 @@ function makeSupabaseDriver() {
       const row = { sync_key: meta.syncKey, rev: meta.rev, updated_at: meta.updatedAt, device_id: meta.deviceId, checksum: meta.checksum, size: meta.size, enc: meta.enc, payload: payload };
       const rows = await req('POST', 'workbench_sync?on_conflict=sync_key', row, 'resolution=merge-duplicates,return=representation');
       if (rows && rows[0]) cached = rows[0];
+    },
+    deleteRemote: async function () {
+      await req('DELETE', 'workbench_sync?' + keyExpr(), null, 'return=minimal');
     }
   };
 }
@@ -1901,6 +1934,10 @@ const ACTIONS = {
   moveGradeSubject: function (el) { moveGradeSubject(parseInt(el.dataset.idx, 10), el.dataset.dir); },
   addGradeSubject: function () { addGradeSubject(); },
   removeGradeSubject: function (el) { removeGradeSubject(parseInt(el.dataset.idx, 10)); },
+  moveGradeSubjectByName: function (el) { moveGradeSubjectByName(el.dataset.name, el.dataset.dir); },
+  clearCloudData: function () {
+    confirmBox({ title: '清除云端数据', message: '将删除云端备份的同步数据（本地数据保留）。若本地仍是演示数据，建议先“清除现有数据”再重新同步，避免把演示数据再传上去。', danger: true, okText: '清除云端', onOk: function () { SyncEngine.clearCloud(); } });
+  },
   scoreCsvPick: function () { const f = document.getElementById('scoreCsvFile'); if (f) f.click(); },
   scoreCsvTemplate: function (el) { scoreCsvTemplate(el.dataset.id); },
   sortClassScores: function (el) { sortClassScores(el); },

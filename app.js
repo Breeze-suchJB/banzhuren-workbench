@@ -1,5 +1,5 @@
 /* 构建版本 */
-const APP_VERSION = '20260817-153343';
+const APP_VERSION = '20260817-154929';
 /* ================= 数据层 ================= */
 const STORAGE_KEY = 'banzhuren_workbench_v1';
 const DB_VERSION = 1;
@@ -80,7 +80,7 @@ function defaultSettings() {
     topPercent: 20,
     criticalPercent: 40,
     topMode: 'pct', topScore: 0,
-    criticalMode: 'pct', criticalScore: 0,
+    criticalMode: 'pct', criticalScore: 0, criticalScoreHigh: 0,
     failMode: 'pct', failPercent: 15, failScore: 0,
     maskPhone: true,
     showClock: true,
@@ -1790,7 +1790,7 @@ function gradePersonalHtml() {
       '<td class="num">' + (sc && comboSubs && comboTotal > 0 ? comboTotal : '—') + '</td>' +
       '<td class="num" style="font-weight:700">' + (sc ? sc.total : '—') + '</td><td class="num">' + (sc ? sc.rank : '—') + '</td><td class="num">' + (sc && e.total ? Math.round((sc.total / e.total) * 1000) / 10 : '—') + '%</td></tr>';
   }).join('');
-  const headCells = '<th>考试</th><th>日期</th>' + allSubj.map(function (nm) { return '<th class="center">' + esc(nm) + '</th>'; }).join('') + '<th class="center">主科总分</th><th class="center">选科组合分</th><th class="center">总分</th><th class="center">班级排名</th><th class="center">得分率</th>';
+  const headCells = '<th>考试</th><th>日期</th>' + allSubj.map(function (nm) { return '<th class="center">' + esc(nm) + '<br><span class="subj-arrows"><button type="button" class="btn btn-ico subj-move" data-action="moveGradeSubjectByName" data-name="' + esc(nm) + '" data-dir="left" title="左移">◀</button><button type="button" class="btn btn-ico subj-move" data-action="moveGradeSubjectByName" data-name="' + esc(nm) + '" data-dir="right" title="右移">▶</button></span></th>'; }).join('') + '<th class="center">主科总分</th><th class="center">选科组合分</th><th class="center">总分</th><th class="center">班级排名</th><th class="center">得分率</th>';
   return '<div class="card"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px">' + sel + '<input id="personalSearch" placeholder="🔍 搜索学生…" style="border:1px solid var(--border);border-radius:10px;padding:8px 12px;min-width:150px">' + '<button class="btn small primary" data-action="setPersonalStu">查询</button><button class="btn small outline" data-action="genAnalysis" data-id="' + (st ? st.id : '') + '">生成学情分析</button></div>' +
     '<div class="chart-box">' + chart + '</div>' +
     '<div class="table-wrap" style="margin-top:12px;overflow-x:auto"><table class="tbl ta-center"><thead><tr>' + headCells + '</tr></thead><tbody>' + (rows || '<tr><td colspan="' + (allSubj.length + 7) + '">' + emptyHtml('暂无成绩') + '</td></tr>') + '</tbody></table></div></div>';
@@ -2218,7 +2218,7 @@ function gradeClassScoresHtml() {
   }
   const hasMain = ordered.some(s => MAIN_SUBJECTS.indexOf(s.name) >= 0);
   const hasCombo = currentStudents().some(s => comboSubjectsOf(s));
-  const subjHead = ordered.map(s => '<th class="center">' + esc(s.name) + '<br><small class="sortable" data-action="sortClassScores" data-key="subj:' + esc(s.name) + '" title="点击排序">' + s.full + '分' + classSortArrow('subj:' + s.name) + '</small></th>').join('');
+  const subjHead = ordered.map(s => '<th class="center">' + esc(s.name) + '<br><small class="sortable" data-action="sortClassScores" data-key="subj:' + esc(s.name) + '" title="点击排序">' + s.full + '分' + classSortArrow('subj:' + s.name) + '</small><br><span class="subj-arrows"><button type="button" class="btn btn-ico subj-move" data-action="moveGradeSubjectByName" data-name="' + esc(s.name) + '" data-dir="left" title="左移">◀</button><button type="button" class="btn btn-ico subj-move" data-action="moveGradeSubjectByName" data-name="' + esc(s.name) + '" data-dir="right" title="右移">▶</button></span></th>').join('');
   const head = '<tr><th class="center sortable" data-action="sortClassScores" data-key="rank" title="点击排序">排名' + classSortArrow('rank') + '</th><th style="min-width:120px">学生</th>' + subjHead +
     '<th class="center"><button type="button" class="btn btn-ico" data-action="classAddSubject" data-id="' + selId + '" title="添加科目">＋</button><button type="button" class="btn btn-ico danger" data-action="openDeleteSubjectModal" data-id="' + selId + '" title="删除科目">－</button></th>' +
     (hasMain ? '<th class="center sortable" data-action="sortClassScores" data-key="main" title="点击排序">主科总分' + classSortArrow('main') + '</th>' : '') +
@@ -2369,7 +2369,13 @@ function comboSubjectsOf(stu) {
 function tierLabel(key) {
   const s = DB.data.settings;
   if (key === 'top') return s.topMode === 'score' ? '≥ ' + (s.topScore || 0) + ' 分' : '前 ' + s.topPercent + '%';
-  if (key === 'crit') return s.criticalMode === 'score' ? '≥ ' + (s.criticalScore || 0) + ' 分' : '前 ' + s.criticalPercent + '%';
+  if (key === 'crit') {
+    if (s.criticalMode === 'score') {
+      const lo = s.criticalScore || 0, hi = s.criticalScoreHigh || 0;
+      return hi > lo ? '≥ ' + lo + ' ~ < ' + hi + ' 分' : '≥ ' + lo + ' 分';
+    }
+    return '前 ' + s.criticalPercent + '%';
+  }
   if (key === 'fail') return s.failMode === 'score' ? '< ' + (s.failScore || 0) + ' 分' : '后 ' + s.failPercent + '%';
   return '';
 }
@@ -2381,7 +2387,10 @@ function tierTop(sorted) {
 }
 function tierCrit(sorted) {
   const s = DB.data.settings;
-  if (s.criticalMode === 'score' && (s.criticalScore || 0) > 0) return sorted.filter(x => x.total >= s.criticalScore);
+  if (s.criticalMode === 'score' && ((s.criticalScore || 0) > 0 || (s.criticalScoreHigh || 0) > 0)) {
+    const lo = s.criticalScore || 0, hi = s.criticalScoreHigh || 0;
+    return sorted.filter(x => x.total >= lo && (!hi || x.total < hi));
+  }
   const topN = Math.max(1, Math.round(currentStudents().length * ((s.topPercent || 20) / 100)));
   const critN = Math.max(1, Math.round(currentStudents().length * ((s.criticalPercent || 40) / 100)));
   return sorted.slice(topN, critN);
@@ -2391,6 +2400,13 @@ function tierFail(list) {
   if (s.failMode === 'score' && (s.failScore || 0) > 0) return list.filter(x => x.total < s.failScore);
   const n = Math.max(1, Math.round(currentStudents().length * ((s.failPercent || 15) / 100)));
   return list.slice().sort((a, b) => a.total - b.total).slice(0, n);
+}
+function moveGradeSubjectByName(name, dir) {
+  const order = DB.data.settings.gradeSubjects || [];
+  const i = order.indexOf(name);
+  const j = i + (dir === 'left' ? -1 : 1);
+  if (i >= 0 && j >= 0 && j < order.length) { const tmp = order[i]; order[i] = order[j]; order[j] = tmp; DB.save(); render(); }
+  else toast('已在最' + (dir === 'left' ? '左' : '右') + '，无法移动', 'err');
 }
 
 function attDetailModal(studentId) {
