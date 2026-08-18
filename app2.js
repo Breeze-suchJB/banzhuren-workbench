@@ -1367,6 +1367,38 @@ const SyncEngine = {
       this._busy = false;
     }
   },
+  clearAllDevices: async function () {
+    if (!this.enabled()) { toast('未启用云同步，无法同步清空其他设备（请先填写云同步配置）', 'err'); return false; }
+    try {
+      const s = this.settings();
+      const drv = this.driver();
+      /* 构造“已清空”的空数据（保留当前设置，班级/学生/成绩等全清） */
+      let empty = null;
+      if (typeof blankData === 'function') { empty = blankData(); }
+      else if (typeof emptyData === 'function') { empty = emptyData(); }
+      else { empty = JSON.parse(JSON.stringify(DB.data)); }
+      if (DB.data && DB.data.settings && empty) empty.settings = JSON.parse(JSON.stringify(DB.data.settings));
+      if (empty && empty.settings) { empty.settings.demoMode = true; empty.settings.cleanSlate = true; }
+      /* 1) 先真实删除云端旧记录 */
+      try { await drv.deleteRemote(); } catch (e) {}
+      /* 2) 再推送空数据，版本号取当前时间（远大于任何设备本地 rev），保证所有设备拉取后都清空 */
+      const rev = Math.max((s.rev || 0) + 1, Date.now());
+      const saved = DB.data;
+      DB.data = empty;
+      let payload = '';
+      try { payload = this.serialize(); } finally { DB.data = saved; }
+      const comp = await this._compress(payload);
+      const meta = { syncKey: s.syncKey || 'main', rev: rev, updatedAt: syncNowIso(), deviceId: syncDeviceId(), checksum: hashStr(comp.data), size: comp.data.length, enc: comp.enc };
+      await drv.push(comp.data, meta);
+      s.rev = rev; s.updatedAt = meta.updatedAt; s.lastSyncAt = meta.updatedAt; s.lastError = '';
+      this._dirty = false; this._driverCache = null;
+      this._saveMeta();
+      return true;
+    } catch (e) {
+      toast('同步清空其他设备失败：' + (e.message || e), 'err');
+      return false;
+    }
+  },
   clearCloud: async function () {
     if (!this.enabled()) { toast('当前未启用云同步，无法清除云端数据', 'err'); return; }
     try {
@@ -2414,10 +2446,10 @@ const ACTIONS = {
     }});
   },
   wipeAll: function () {
-    confirmBox({ title: '一键清空所有数据（本地 + 云端）', message: '将清空班级、学生、成绩、考勤等全部数据与系统设置，并删除云端同步数据；之后打开/刷新不再自动生成演示数据，也不会自动拉取云端旧数据（需手动点“立即上传/立即拉取”才会恢复同步）。如需演示可点“重新生成演示数据”。此操作不可恢复，请先导出备份！', danger: true, okText: '一键清空', onOk: function () {
-      if (typeof SyncEngine !== 'undefined' && SyncEngine.enabled()) { SyncEngine.clearCloud(); }
+    confirmBox({ title: '一键清空所有数据（本地 + 云端）', message: '将清空班级、学生、成绩、考勤等全部数据与系统设置，并删除云端同步数据；之后打开/刷新不再自动生成演示数据，也不会自动拉取云端旧数据。若已启用云同步，其他设备（手机/平板）下次同步时也会自动被清空。如需演示可点“重新生成演示数据”。此操作不可恢复，请先导出备份！', danger: true, okText: '一键清空', onOk: function () {
       DB.wipeAll();
-      render(); toast('已一键清空所有数据（本地+云端），不再自动生成演示数据');
+      if (typeof SyncEngine !== 'undefined' && SyncEngine.enabled()) { SyncEngine.clearAllDevices(); }
+      render(); toast('已一键清空（本机+云端），其他设备同步后也会自动清空');
     }});
   },
   clearDemo: function () {
