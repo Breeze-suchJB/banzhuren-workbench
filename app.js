@@ -1,5 +1,5 @@
 /* 构建版本 */
-const APP_VERSION = '20260819-020031';
+const APP_VERSION = '20260819-021346';
 /* ================= 数据层 ================= */
 const STORAGE_KEY = 'banzhuren_workbench_v1';
 const NO_DEMO_KEY = 'banzhuren_no_demo';
@@ -1159,7 +1159,8 @@ const NAV_GROUPS = [
     { id: 'profile', label: '个人资料修改', ico: '👤' }
   ]},
   { name: '个性化', items: [
-    { id: 'settings', label: '仪表盘设置', ico: '⚙️' }
+    { id: 'settings', label: '仪表盘设置', ico: '⚙️' },
+    { id: 'help', label: '使用帮助', ico: '📖' }
   ]}
 ];
 /* ================= 模块：仪表盘 ================= */
