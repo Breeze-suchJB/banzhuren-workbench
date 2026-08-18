@@ -1,5 +1,5 @@
 /* 构建版本 */
-const APP_VERSION = '20260819-011406';
+const APP_VERSION = '20260819-012016';
 /* ================= 数据层 ================= */
 const STORAGE_KEY = 'banzhuren_workbench_v1';
 const NO_DEMO_KEY = 'banzhuren_no_demo';

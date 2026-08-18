@@ -974,17 +974,28 @@ function renderDataMgr() {
     '<div class="field"><label class="hint" style="font-size:13px"><input type="checkbox" data-field="maskPhone" ' + (d.settings.maskPhone ? 'checked' : '') + '> 手机号脱敏</label></div>' +
     '<div class="field"><label class="hint" style="font-size:13px"><input type="checkbox" data-field="showClock" ' + (d.settings.showClock ? 'checked' : '') + '> 显示实时时钟</label></div>' +
     '</div><div class="btn-row" style="margin-top:14px"><button class="btn primary" data-action="saveSettings">保存设置</button></div></div>';
-  const danger = '<div class="card"><div class="card-title">💾 数据备份与恢复</div><div class="btn-row">' +
-    '<button class="btn primary" data-action="exportJson">导出 JSON 完整备份</button>' +
-    '<button class="btn outline" data-action="importJson">导入 JSON 恢复</button>' +
-    '<button class="btn outline" data-action="exportStudents">导出学生 CSV</button></div></div>' +
-    '<div class="risk-zone"><div class="rz-title">⚠️ 危险操作区</div><div style="font-size:12.5px;color:var(--text2);margin-bottom:10px">以下操作会清空或重置本地数据，请谨慎操作。</div>' +
-    '<div class="btn-row"><button class="btn danger-solid" data-action="wipeAll">🧹 一键清空所有数据（本地+云端）</button><button class="btn danger" data-action="clearAllData">清除现有数据（保留班级与设置）</button><button class="btn danger" data-action="clearDemo">清空演示数据</button><button class="btn danger-solid" data-action="resetDemo">重新生成演示数据</button></div></div>';
+  const backup = '<div class="card"><div class="card-title">💾 数据备份与恢复</div>' +
+    '<div style="font-size:12.5px;color:var(--text2);margin-bottom:10px">先备份，再放心操作；恢复可回退到备份状态。</div>' +
+    '<div class="btn-row" style="flex-wrap:wrap">' +
+    '<button class="btn primary" data-action="exportJson">📥 导出 JSON 完整备份</button>' +
+    '<button class="btn outline" data-action="importJson">📤 导入 JSON 恢复</button>' +
+    '<button class="btn outline" data-action="exportStudents">👥 导出学生 CSV（可按时间段）</button>' +
+    '</div></div>' +
+    '<div class="risk-zone"><div class="rz-title">🧹 清空与重置（危险操作，请谨慎）</div>' +
+    '<div class="risk-list">' +
+    '<div class="risk-item"><div class="ri-main"><div class="ri-title">🧹 一键清空所有数据（本地 + 云端 + 所有设备）</div><div class="ri-desc">清空班级/学生/成绩/设置，删除云端，其他设备同步后也会清空；不再自动生成演示数据。</div></div><button class="btn danger-solid" data-action="wipeAll">一键清空</button></div>' +
+    '<div class="risk-item"><div class="ri-main"><div class="ri-title">🗑 仅删除云端数据（所有设备同步清空）</div><div class="ri-desc">删除云端备份并让其他设备同步清空；本地数据保留。</div></div><button class="btn danger" data-action="clearCloudData">删除云端</button></div>' +
+    '<div class="risk-item"><div class="ri-main"><div class="ri-title">🧽 清除现有数据（保留班级与设置）</div><div class="ri-desc">清空学生/成绩/考勤等业务数据，保留班级、系统设置与云同步配置。</div></div><button class="btn danger" data-action="clearAllData">清除现有数据</button></div>' +
+    '<div class="risk-item"><div class="ri-main"><div class="ri-title">📦 清空演示数据</div><div class="ri-desc">清空全部本地数据（含班级）。</div></div><button class="btn danger" data-action="clearDemo">清空演示</button></div>' +
+    '<div class="risk-item"><div class="ri-main"><div class="ri-title">🔄 重新生成演示数据</div><div class="ri-desc">生成一份新演示数据（姓名统一 3 字），保留云同步配置；演示模式下不会自动上传。</div></div><button class="btn danger-solid" data-action="resetDemo">重新生成</button></div>' +
+    '</div></div>';
   const syncCard = (typeof syncCardHtml === 'function') ? syncCardHtml() : '';
   const ver = (typeof APP_VERSION !== 'undefined' && APP_VERSION) ? APP_VERSION : '?';
-  return '<div class="page-title">💾 数据管理</div><div class="page-sub">数据总览、备份恢复与系统设置</div>' + overview +
+  return '<div class="page-title">💾 数据管理</div><div class="page-sub">数据总览 · 备份恢复 · 云同步 · 系统设置 · 清空重置</div>' + overview +
     '<div style="font-size:12px;color:var(--text3);margin-bottom:10px">当前版本：v' + ver + '</div>' +
-    settingsForm + '<div style="margin-top:16px">' + syncCard + '</div><div style="margin-top:16px">' + danger + '</div>';
+    backup +
+    '<div style="margin-top:16px">' + syncCard + '</div>' +
+    settingsForm;
 }
 function saveSettings() {
   const v = readFields();
@@ -1493,7 +1504,6 @@ const SyncEngine = {
       '<button class="btn outline" data-action="syncPull">立即拉取</button>' +
       '<button class="btn outline" data-action="cloudCheck">🔍 检测云端</button>' +
       '<button class="btn danger" data-action="syncDisconnect">断开云同步</button>' +
-      '<button class="btn danger-solid" data-action="clearCloudData">🗑 清除云端数据</button>' +
       '</div>' +
       '<div style="margin-top:12px;font-size:12px;color:var(--text3);line-height:1.9">' +
       '<b>冲突规则：</b>多台设备同时编辑时以“最后保存的版本”为准；覆盖前会自动在浏览器里备份一份（banzhuren_sync_backup_*），不会丢数据。<br>' +
@@ -2009,7 +2019,10 @@ const ACTIONS = {
   exitDemoAndPush: function () { ACTIONS.pushNow(); },
   cloudCheck: function () { SyncEngine.cloudCheck(); },
   clearCloudData: function () {
-    confirmBox({ title: '清除云端数据', message: '将删除云端备份的同步数据（本地数据保留）。若本地仍是演示数据，建议先“清除现有数据”再重新同步，避免把演示数据再传上去。', danger: true, okText: '清除云端', onOk: function () { SyncEngine.clearCloud(); } });
+    confirmBox({ title: '仅删除云端数据', message: '将删除云端备份，并让其他设备（手机/平板）下次同步时自动清空云端数据；本机本地数据保留。若本地仍是演示数据，建议之后用真实数据上传。', danger: true, okText: '删除云端', onOk: function () {
+      if (typeof SyncEngine === 'undefined' || !SyncEngine.enabled()) { toast('未启用云同步，无法删除云端数据', 'err'); return; }
+      SyncEngine.clearAllDevices();
+    } });
   },
   scoreCsvPick: function () { const f = document.getElementById('scoreCsvFile'); if (f) f.click(); },
   scoreCsvTemplate: function (el) { scoreCsvTemplate(el.dataset.id); },
