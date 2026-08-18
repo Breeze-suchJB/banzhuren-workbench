@@ -983,8 +983,8 @@ function renderDataMgr() {
     '</div></div>';
   const risk = '<div class="risk-zone"><div class="rz-title">🧹 清空与重置（危险操作，请谨慎）</div>' +
     '<div class="risk-list">' +
-    '<div class="risk-item"><div class="ri-main"><div class="ri-title">🧹 一键清空所有数据（本地 + 云端 + 所有设备）</div><div class="ri-desc">清空班级/学生/成绩/设置，删除云端，其他设备同步后也会清空；不再自动生成演示数据。</div></div><button class="btn danger-solid" data-action="wipeAll">一键清空</button></div>' +
-    '<div class="risk-item"><div class="ri-main"><div class="ri-title">🗑 仅删除云端数据（所有设备同步清空）</div><div class="ri-desc">删除云端备份并让其他设备同步清空；本地数据保留。</div></div><button class="btn danger" data-action="clearCloudData">删除云端</button></div>' +
+    '<div class="risk-item"><div class="ri-main"><div class="ri-title">🧹 一键清空本机数据（本地 + 云端）</div><div class="ri-desc">清空本机班级/学生/成绩/设置，并删除云端数据；之后不再自动生成演示数据。⚠️ 其他设备不会自动删除，请在每台设备上各执行一次。</div></div><button class="btn danger-solid" data-action="wipeAll">一键清空</button></div>' +
+    '<div class="risk-item"><div class="ri-main"><div class="ri-title">🗑 仅删除云端数据（本地保留）</div><div class="ri-desc">删除云端备份；本机本地数据保留。⚠️ 其他设备不会自动删除，请在每台设备上分别处理。</div></div><button class="btn danger" data-action="clearCloudData">删除云端</button></div>' +
     '<div class="risk-item"><div class="ri-main"><div class="ri-title">📦 清空演示数据</div><div class="ri-desc">清空全部本地数据（含班级）。</div></div><button class="btn danger" data-action="clearDemo">清空演示</button></div>' +
     '<div class="risk-item"><div class="ri-main"><div class="ri-title">🔄 重新生成演示数据</div><div class="ri-desc">生成一份新演示数据（姓名统一 3 字），保留云同步配置；演示模式下不会自动上传。</div></div><button class="btn danger-solid" data-action="resetDemo">重新生成</button></div>' +
     '</div></div>';
@@ -1417,7 +1417,7 @@ const SyncEngine = {
       s.rev = rev; s.updatedAt = meta.updatedAt; s.lastSyncAt = meta.updatedAt; s.lastError = '';
       this._dirty = false; this._driverCache = null;
       this._saveMeta();
-      toast('已同步清空所有设备（云端已写入清空标记）');
+      toast('云端已清空（尽力同步其他设备；保险起见请在每台设备上再确认一次）');
       return true;
     } catch (e) {
       toast('同步清空其他设备失败：' + (e.message || e), 'err');
@@ -2033,7 +2033,7 @@ const ACTIONS = {
   exitDemoAndPush: function () { ACTIONS.pushNow(); },
   cloudCheck: function () { SyncEngine.cloudCheck(); },
   clearCloudData: function () {
-    confirmBox({ title: '仅删除云端数据', message: '将删除云端备份，并让其他设备（手机/平板）下次同步时自动清空云端数据；本机本地数据保留。若本地仍是演示数据，建议之后用真实数据上传。', danger: true, okText: '删除云端', onOk: function () {
+    confirmBox({ title: '仅删除云端数据（本地保留）', message: '将删除云端备份；本机本地数据保留。⚠️ 其他设备不会自动删除，请在每台设备上分别处理（需要清空的设备各自执行“一键清空”或本操作）。若本地仍是演示数据，建议之后用真实数据上传。', danger: true, okText: '删除云端', onOk: function () {
       if (typeof SyncEngine === 'undefined' || !SyncEngine.enabled()) { toast('未启用云同步，无法删除云端数据', 'err'); return; }
       SyncEngine.clearAllDevices();
     } });
@@ -2473,10 +2473,10 @@ const ACTIONS = {
     }});
   },
   wipeAll: function () {
-    confirmBox({ title: '一键清空所有数据（本地 + 云端）', message: '将清空班级、学生、成绩、考勤等全部数据与系统设置，并删除云端同步数据；之后打开/刷新不再自动生成演示数据，也不会自动拉取云端旧数据。\n\n⚠️ 重要：为确保彻底清空，请在【每一台设备】上都执行一次本操作（手机、平板、电脑各清一次）。若其他设备在线且已是最新版，它们会自动同步清空；但保险起见，请各端都清一次，以免残留。\n\n如需演示可点“重新生成演示数据”。此操作不可恢复，请先导出备份！', danger: true, okText: '一键清空', onOk: function () {
+    confirmBox({ title: '一键清空本机数据（本地 + 云端）', message: '将清空本机班级、学生、成绩、考勤等全部数据与系统设置，并删除云端同步数据；之后打开/刷新不再自动生成演示数据，也不会自动拉取云端旧数据。\n\n⚠️ 重要：其他设备【不会自动删除】。为确保彻底清空，请在【每一台设备】上都执行一次本操作（手机、平板、电脑各清一次）。\n\n如需演示可点“重新生成演示数据”。此操作不可恢复，请先导出备份！', danger: true, okText: '一键清空', onOk: function () {
       DB.wipeAll();
       if (typeof SyncEngine !== 'undefined' && SyncEngine.enabled()) { SyncEngine.clearAllDevices(); }
-      render(); toast('本机已清空。提醒：请在手机/平板/电脑每一台设备上也都执行一次“一键清空”，确保全部清干净');
+      render(); toast('本机已清空。⚠️ 请在手机/平板/电脑每一台设备上也都执行一次“一键清空”，确保全部清干净');
     }});
   },
   clearDemo: function () {
