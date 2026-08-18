@@ -2473,10 +2473,10 @@ const ACTIONS = {
     }});
   },
   wipeAll: function () {
-    confirmBox({ title: '一键清空所有数据（本地 + 云端）', message: '将清空班级、学生、成绩、考勤等全部数据与系统设置，并删除云端同步数据；之后打开/刷新不再自动生成演示数据，也不会自动拉取云端旧数据。若已启用云同步，其他设备（手机/平板）下次同步时也会自动被清空。如需演示可点“重新生成演示数据”。此操作不可恢复，请先导出备份！', danger: true, okText: '一键清空', onOk: function () {
+    confirmBox({ title: '一键清空所有数据（本地 + 云端）', message: '将清空班级、学生、成绩、考勤等全部数据与系统设置，并删除云端同步数据；之后打开/刷新不再自动生成演示数据，也不会自动拉取云端旧数据。\n\n⚠️ 重要：为确保彻底清空，请在【每一台设备】上都执行一次本操作（手机、平板、电脑各清一次）。若其他设备在线且已是最新版，它们会自动同步清空；但保险起见，请各端都清一次，以免残留。\n\n如需演示可点“重新生成演示数据”。此操作不可恢复，请先导出备份！', danger: true, okText: '一键清空', onOk: function () {
       DB.wipeAll();
       if (typeof SyncEngine !== 'undefined' && SyncEngine.enabled()) { SyncEngine.clearAllDevices(); }
-      render(); toast('已一键清空（本机+云端），其他设备同步后也会自动清空');
+      render(); toast('本机已清空。提醒：请在手机/平板/电脑每一台设备上也都执行一次“一键清空”，确保全部清干净');
     }});
   },
   clearDemo: function () {
