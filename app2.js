@@ -980,22 +980,22 @@ function renderDataMgr() {
     '<button class="btn primary" data-action="exportJson">📥 导出 JSON 完整备份</button>' +
     '<button class="btn outline" data-action="importJson">📤 导入 JSON 恢复</button>' +
     '<button class="btn outline" data-action="exportStudents">👥 导出学生 CSV（可按时间段）</button>' +
-    '</div></div>' +
-    '<div class="risk-zone"><div class="rz-title">🧹 清空与重置（危险操作，请谨慎）</div>' +
+    '</div></div>';
+  const risk = '<div class="risk-zone"><div class="rz-title">🧹 清空与重置（危险操作，请谨慎）</div>' +
     '<div class="risk-list">' +
     '<div class="risk-item"><div class="ri-main"><div class="ri-title">🧹 一键清空所有数据（本地 + 云端 + 所有设备）</div><div class="ri-desc">清空班级/学生/成绩/设置，删除云端，其他设备同步后也会清空；不再自动生成演示数据。</div></div><button class="btn danger-solid" data-action="wipeAll">一键清空</button></div>' +
     '<div class="risk-item"><div class="ri-main"><div class="ri-title">🗑 仅删除云端数据（所有设备同步清空）</div><div class="ri-desc">删除云端备份并让其他设备同步清空；本地数据保留。</div></div><button class="btn danger" data-action="clearCloudData">删除云端</button></div>' +
-    '<div class="risk-item"><div class="ri-main"><div class="ri-title">🧽 清除现有数据（保留班级与设置）</div><div class="ri-desc">清空学生/成绩/考勤等业务数据，保留班级、系统设置与云同步配置。</div></div><button class="btn danger" data-action="clearAllData">清除现有数据</button></div>' +
     '<div class="risk-item"><div class="ri-main"><div class="ri-title">📦 清空演示数据</div><div class="ri-desc">清空全部本地数据（含班级）。</div></div><button class="btn danger" data-action="clearDemo">清空演示</button></div>' +
     '<div class="risk-item"><div class="ri-main"><div class="ri-title">🔄 重新生成演示数据</div><div class="ri-desc">生成一份新演示数据（姓名统一 3 字），保留云同步配置；演示模式下不会自动上传。</div></div><button class="btn danger-solid" data-action="resetDemo">重新生成</button></div>' +
     '</div></div>';
   const syncCard = (typeof syncCardHtml === 'function') ? syncCardHtml() : '';
   const ver = (typeof APP_VERSION !== 'undefined' && APP_VERSION) ? APP_VERSION : '?';
-  return '<div class="page-title">💾 数据管理</div><div class="page-sub">数据总览 · 备份恢复 · 云同步 · 系统设置 · 清空重置</div>' + overview +
+  return '<div class="page-title">💾 数据管理</div><div class="page-sub">数据总览 · 系统设置 · 云同步 · 数据备份与恢复</div>' + overview +
     '<div style="font-size:12px;color:var(--text3);margin-bottom:10px">当前版本：v' + ver + '</div>' +
-    backup +
+    settingsForm +
     '<div style="margin-top:16px">' + syncCard + '</div>' +
-    settingsForm;
+    '<div style="margin-top:16px">' + backup + '</div>' +
+    '<div style="margin-top:16px">' + risk + '</div>';
 }
 function saveSettings() {
   const v = readFields();
@@ -1302,9 +1302,18 @@ const SyncEngine = {
     }
   },
   _pullSilent: function () {
-    /* 自动拉取：清净状态跳过（避免云端旧数据回流）；本地有未同步修改时也跳过 */
-    if (!this.enabled() || this._busy || this._dirty) return;
+    /* 自动拉取：清净状态跳过（避免云端旧数据回流） */
+    if (!this.enabled() || this._busy) return;
     if (DB.data.settings && DB.data.settings.cleanSlate) return;
+    if (this._dirty) {
+      /* 本地有未同步修改：通常跳过，但若云端版本出现大幅跳变（如其他设备“一键清空”写入的已清空标记），仍拉取以保证全网清空 */
+      const engine = this;
+      this.driver().getMeta().then(function (remote) {
+        if (!remote) return;
+        if ((remote.rev || 0) > (engine.settings().rev || 0) + 1000) engine._pull(true, false).catch(function () {});
+      }).catch(function () {});
+      return;
+    }
     const self = this;
     this._pull(true, false).catch(function () {});
   },
@@ -1401,9 +1410,14 @@ const SyncEngine = {
       const comp = await this._compress(payload);
       const meta = { syncKey: s.syncKey || 'main', rev: rev, updatedAt: syncNowIso(), deviceId: syncDeviceId(), checksum: hashStr(comp.data), size: comp.data.length, enc: comp.enc };
       await drv.push(comp.data, meta);
+      /* 验证云端确实已变成“已清空”标记 */
+      let verified = false;
+      try { const chk = await drv.getMeta(); verified = !!(chk && (chk.rev || 0) === rev); } catch (e) {}
+      if (!verified) { toast('⚠️ 云端“已清空”标记未确认写入，请检查 Supabase 权限（RLS 需关闭或授权），否则其他设备不会同步清空', 'err'); return false; }
       s.rev = rev; s.updatedAt = meta.updatedAt; s.lastSyncAt = meta.updatedAt; s.lastError = '';
       this._dirty = false; this._driverCache = null;
       this._saveMeta();
+      toast('已同步清空所有设备（云端已写入清空标记）');
       return true;
     } catch (e) {
       toast('同步清空其他设备失败：' + (e.message || e), 'err');
