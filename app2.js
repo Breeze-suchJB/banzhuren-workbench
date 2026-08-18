@@ -1370,16 +1370,25 @@ const SyncEngine = {
   clearCloud: async function () {
     if (!this.enabled()) { toast('当前未启用云同步，无法清除云端数据', 'err'); return; }
     try {
-      await this.driver().deleteRemote();
+      const n = await this.driver().deleteRemote();
       const s = this.settings();
       s.rev = 0; s.updatedAt = ''; s.lastSyncAt = ''; s.lastError = '';
       this._dirty = false; this._driverCache = null;
       this._saveMeta();
       this._setStatus('云端数据已清除', 'green');
-      toast('云端数据已清除（本地保留；若本地是演示数据请先清空本地再同步）');
+      if (n === 0) toast('⚠️ 云端没有删除任何记录：可能已无数据，或 Supabase 表开启了 RLS/同步标识不匹配，请点“🔍 检测云端”确认', 'err');
+      else toast('云端数据已清除（删除 ' + n + ' 条记录）');
     } catch (e) {
       toast('清除云端数据失败：' + (e.message || e), 'err');
     }
+  },
+  cloudCheck: async function () {
+    if (!this.enabled()) { toast('未启用云同步，请先填写并保存云同步配置', 'err'); return; }
+    try {
+      const meta = await this.driver().getMeta();
+      if (!meta) { toast('✅ 云端无数据（当前同步标识下为空）'); return; }
+      toast('云端有数据：同步标识 ' + meta.syncKey + ' · 版本 ' + meta.rev + ' · 更新于 ' + fmtSyncTime(meta.updatedAt));
+    } catch (e) { toast('检测云端失败：' + (e.message || e), 'err'); }
   },
   disconnect: function () {
     const s = this.settings();
@@ -1450,6 +1459,7 @@ const SyncEngine = {
       '<button class="btn primary" data-action="saveSync">保存并立即同步</button>' +
       '<button class="btn primary" data-action="pushNow">📤 立即上传到云端</button>' +
       '<button class="btn outline" data-action="syncPull">立即拉取</button>' +
+      '<button class="btn outline" data-action="cloudCheck">🔍 检测云端</button>' +
       '<button class="btn danger" data-action="syncDisconnect">断开云同步</button>' +
       '<button class="btn danger-solid" data-action="clearCloudData">🗑 清除云端数据</button>' +
       '</div>' +
@@ -1521,6 +1531,7 @@ function makeLeanCloudDriver() {
       for (let i = 0; i < (chunks.results || []).length; i++) { try { await req('DELETE', 'WorkbenchSyncChunk/' + chunks.results[i].objectId); } catch (e) {} }
       const metas = (await req('GET', 'WorkbenchSyncMeta?where=' + where + '&limit=1000')) || { results: [] };
       for (let i = 0; i < (metas.results || []).length; i++) { try { await req('DELETE', 'WorkbenchSyncMeta/' + metas.results[i].objectId); } catch (e) {} }
+      return (metas.results || []).length;
     }
   };
 }
@@ -1567,6 +1578,7 @@ function makeWebDAVDriver() {
     },
     deleteRemote: async function () {
       await req('PUT', { syncKey: 'main', rev: 0, updatedAt: '', deviceId: '', checksum: '', size: 0, enc: 'none', payload: '' });
+      return 1;
     }
   };
 }
@@ -1613,7 +1625,8 @@ function makeSupabaseDriver() {
       if (rows && rows[0]) cached = rows[0];
     },
     deleteRemote: async function () {
-      await req('DELETE', 'workbench_sync?' + keyExpr(), null, 'return=minimal');
+      const rows = await req('DELETE', 'workbench_sync?' + keyExpr(), null, 'return=representation');
+      return Array.isArray(rows) ? rows.length : 0;
     }
   };
 }
@@ -1962,6 +1975,7 @@ const ACTIONS = {
     SyncEngine.push();
   },
   exitDemoAndPush: function () { ACTIONS.pushNow(); },
+  cloudCheck: function () { SyncEngine.cloudCheck(); },
   clearCloudData: function () {
     confirmBox({ title: '清除云端数据', message: '将删除云端备份的同步数据（本地数据保留）。若本地仍是演示数据，建议先“清除现有数据”再重新同步，避免把演示数据再传上去。', danger: true, okText: '清除云端', onOk: function () { SyncEngine.clearCloud(); } });
   },
