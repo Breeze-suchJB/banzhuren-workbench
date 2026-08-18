@@ -1086,7 +1086,13 @@ window.DEFAULT_SYNC = Object.assign({
 
 const SYNC_DEVICE_KEY = 'banzhuren_device_id';
 const SYNC_BACKUP_PREFIX = 'banzhuren_sync_backup_';
-const SYNC_POLL_MS = 30000;   /* 自动拉取间隔 */
+function syncPollMs() {
+  try {
+    const s = SyncEngine.settings();
+    const v = parseInt((s && s.pollSec) || 10, 10);
+    return Math.max(5, Math.min(120, v)) * 1000;
+  } catch (e) { return 10000; }
+}
 const SYNC_CHUNK_SIZE = 60000; /* LeanCloud 单对象上限约 128KB，留余量分块 */
 
 function syncDeviceId() {
@@ -1145,7 +1151,7 @@ const SyncEngine = {
 
   settings: function () {
     const st = DB.data.settings;
-    if (!st.sync) st.sync = { provider: '', appId: '', appKey: '', syncServer: '', supUrl: '', supKey: '', wdUrl: '', wdUser: '', wdPass: '', syncKey: 'main', rev: 0, updatedAt: '', lastSyncAt: '', lastError: '', deviceName: '' };
+    if (!st.sync) st.sync = { provider: '', appId: '', appKey: '', syncServer: '', supUrl: '', supKey: '', wdUrl: '', wdUser: '', wdPass: '', syncKey: 'main', pollSec: 10, rev: 0, updatedAt: '', lastSyncAt: '', lastError: '', deviceName: '' };
     return st.sync;
   },
   enabled: function () {
@@ -1192,7 +1198,12 @@ const SyncEngine = {
     window.addEventListener('focus', function () { self._pullSilent(); });
     document.addEventListener('visibilitychange', function () { if (!document.hidden) self._pullSilent(); });
     window.addEventListener('online', function () { if (self._dirty && self.enabled()) self.push(); });
-    this._timer = setInterval(function () { self._pullSilent(); }, SYNC_POLL_MS);
+    this._timer = setInterval(function () { self._pullSilent(); }, syncPollMs());
+  },
+  restartTimer: function () {
+    if (this._timer) { clearInterval(this._timer); this._timer = null; }
+    const self = this;
+    this._timer = setInterval(function () { self._pullSilent(); }, syncPollMs());
   },
   _onLocalChange: function () {
     if (this._applying || !this.enabled()) return;
@@ -1505,12 +1516,13 @@ const SyncEngine = {
       field('syncWdUser', 'WebDAV 用户名', s.wdUser, 'text') +
       field('syncWdPass', 'WebDAV 密码', s.wdPass, 'password') +
       '</div>';
-    const body = lcFields + sbFields + wdFields + field('syncKey', '同步空间标识（同一账号多套数据可区分）', s.syncKey || 'main', 'text');
+    const body = lcFields + sbFields + wdFields + field('syncKey', '同步空间标识（同一账号多套数据可区分）', s.syncKey || 'main', 'text') +
+    field('syncPoll', '自动拉取间隔（秒，越快越耗电/流量）', s.pollSec || 10, 'select', '', optionsHtml(['5', '10', '15', '30', '60'], String(s.pollSec || 10)));
     const builtIn = (window.DEFAULT_SYNC && window.DEFAULT_SYNC.supUrl && s.supUrl === String(window.DEFAULT_SYNC.supUrl).trim())
       ? '<div style="font-size:12.5px;color:var(--ok, #16a34a);margin-bottom:8px">📌 已内置 Supabase 配置：更换网址/新设备打开时会自动恢复，无需重新填写。</div>' : '';
     return '<div class="card"><div class="card-title">☁️ 云同步（多设备实时同步）</div>' +
       '<div id="syncStatus" class="sync-status">' + this.statusHtml() + '</div>' + demoNotice + builtIn +
-      '<div style="font-size:12.5px;color:var(--text3);margin-bottom:10px">在每台设备打开本工作台并填写<b>相同</b>的云同步凭据即可互通：本机修改约 2 秒自动上传，每 30 秒自动拉取，也可手动同步。</div>' +
+      '<div style="font-size:12.5px;color:var(--text3);margin-bottom:10px">在每台设备打开本工作台并填写<b>相同</b>的云同步凭据即可互通：本机修改约 2 秒自动上传，自动拉取间隔可调（默认 10 秒），也可手动同步。</div>' +
       '<div class="form-grid"><div class="field"><label>同步方式</label><select data-field="syncProvider">' + providerOpts + '</select></div>' + body + '</div>' +
       '<div class="btn-row" style="margin-top:12px">' +
       '<button class="btn primary" data-action="saveSync">保存并立即同步</button>' +
@@ -2497,12 +2509,14 @@ const ACTIONS = {
     if (s.provider === 'leancloud') { s.appId = (v.syncAppId || '').trim(); s.appKey = v.syncAppKey || ''; s.syncServer = (v.syncServer || '').trim(); }
     if (s.provider === 'supabase') { s.supUrl = (v.syncSupUrl || '').trim(); s.supKey = v.syncSupKey || ''; }
     if (s.provider === 'webdav') { s.wdUrl = (v.syncWdUrl || '').trim(); s.wdUser = (v.syncWdUser || '').trim(); s.wdPass = v.syncWdPass || ''; }
+    if (v.syncPoll) { s.pollSec = parseInt(v.syncPoll, 10) || 10; }
     if (v.syncKey) s.syncKey = String(v.syncKey).trim() || 'main';
     s.deviceName = (DB.data.settings.teacherName || '我的') + '的设备';
     s.lastError = '';
     DB.data.settings.demoMode = false; DB.data.settings.cleanSlate = false;  /* 手动同步=恢复正常上传 */
     SyncEngine._driverCache = null;
     SyncEngine._saveMeta();
+    SyncEngine.restartTimer();
     render();
     if (!SyncEngine.enabled()) { toast('已保存：云同步未启用'); return; }
     SyncEngine.push();
@@ -2886,6 +2900,11 @@ document.addEventListener('change', function (e) {
     state.personalStuId = t.value;
   } else if (t.getAttribute && t.getAttribute('data-field') === 'syncProvider') {
     SyncEngine.toggleProviderFields(t.value);
+  } else if (t.getAttribute && t.getAttribute('data-field') === 'syncPoll') {
+    SyncEngine.settings().pollSec = parseInt(t.value, 10) || 10;
+    SyncEngine._saveMeta();
+    SyncEngine.restartTimer();
+    toast('自动拉取间隔已更新为 ' + t.value + ' 秒');
   }
 });
 window.addEventListener('keydown', function (e) {
