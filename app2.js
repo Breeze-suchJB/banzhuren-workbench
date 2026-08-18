@@ -990,6 +990,7 @@ function renderDataMgr() {
     '</div></div>';
   const syncCard = (typeof syncCardHtml === 'function') ? syncCardHtml() : '';
   const ver = (typeof APP_VERSION !== 'undefined' && APP_VERSION) ? APP_VERSION : '?';
+  const isDemo = !(window.DEFAULT_SYNC && window.DEFAULT_SYNC.supUrl);  // 演示版（未内置云配置）隐藏个人正式版链接
   return '<div class="page-title">💾 数据管理</div><div class="page-sub">数据总览 · 系统设置 · 云同步 · 数据备份与恢复</div>' + overview +
     '<div style="font-size:12px;color:var(--text3);margin-bottom:10px">当前版本：v' + ver + '</div>' +
     settingsForm +
@@ -1073,6 +1074,7 @@ function saveProfilePrefs() {
 /* ================= 模块：使用帮助 ================= */
 function renderHelp() {
   const ver = (typeof APP_VERSION !== 'undefined' && APP_VERSION) ? APP_VERSION : '?';
+  const isDemo = !(window.DEFAULT_SYNC && window.DEFAULT_SYNC.supUrl);  // 演示版（未内置云配置）隐藏个人正式版链接
   const sec = function (title, body) { return '<div class="card"><div class="card-title">' + title + '</div><div style="font-size:13.5px;color:var(--text2);line-height:1.9">' + body + '</div></div>'; };
   const mods = [
     ['📊 仪表盘', '今日课程、量化积分前五、重要倒计时、最新通知等板块；卡片上“查看详情 ›”可一键跳转。左侧最底部“⚙️ 仪表盘设置”可开关板块、拖动排序、调整宽高（手机端自动全宽）。'],
@@ -1097,7 +1099,7 @@ function renderHelp() {
   const modHtml = mods.map(m => '<div class="help-mod"><div class="hm-name">' + m[0] + '</div><div class="hm-desc">' + m[1] + '</div></div>').join('');
   const faq = [
     ['为什么手机删学生电脑能同步，但“一键清空”不能？', '普通修改（如删学生）是增量同步：云端版本+1，其他设备拉取新版本即可，很稳定。“一键清空”是“推翻一切”的特殊操作，要求其他设备在线、是最新版、云端允许写入清空标记、且本地没有未上传改动，任一不满足就不同步。所以清空请在每一台设备上各执行一次。'],
-    ['换电脑 / 新设备怎么用？', '直接用浏览器打开正式版链接：https://breeze-suchJB.github.io/banzhuren-workbench/ 。首次打开会自动内置 Supabase 配置并拉取云端数据，请先等它拉取完成再录入，避免覆盖云端。'],
+    ...(isDemo ? [] : [['换电脑 / 新设备怎么用？', '直接用浏览器打开正式版链接：https://breeze-suchJB.github.io/banzhuren-workbench/ 。首次打开会自动内置 Supabase 配置并拉取云端数据，请先等它拉取完成再录入，避免覆盖云端。']]),
     ['演示数据会传到云端吗？', '不会自动上传：重新生成演示数据后进入“演示模式”，本地改动不会自动上传，避免覆盖真实数据。确认要上传时，点“📤 立即上传到云端”。'],
     ['云同步失败怎么办？', '检查网络；确认 Supabase 地址和 anon 公钥无误；Supabase 表需允许读写（RLS 关闭或授权）。可在云同步卡片点“🔍 检测云端”看云端到底有没有数据。'],
     ['清空后数据又回来了？', '本地刷新不会回来（清净状态）。若你“立即拉取”又拉回旧数据，说明云端没删干净：在 Supabase SQL Editor 执行 delete from workbench_sync; 或检查表权限。'],
@@ -1107,7 +1109,7 @@ function renderHelp() {
   ];
   const faqHtml = faq.map(q => '<div class="help-faq"><div class="hf-q">❓ ' + q[0] + '</div><div class="hf-a">' + q[1] + '</div></div>').join('');
   return '<div class="page-title">📖 使用帮助</div><div class="page-sub">工作台使用手册 · 当前版本 v' + ver + '</div>' +
-    sec('一、这是什么、怎么打开', '这是一个<b>网页应用</b>：电脑/手机/平板用浏览器打开即可使用，也可“添加到主屏幕”像 App 一样用。<br>数据 = 每台设备浏览器本地 + 云端同步（多设备互通）。<br><b>正式版：</b>https://breeze-suchJB.github.io/banzhuren-workbench/ ｜ <b>给同事的演示版：</b>https://breeze-suchJB.github.io/banzhuren-workbench-clean/（不含你的数据）') +
+    sec('一、这是什么、怎么打开', '这是一个<b>网页应用</b>：电脑/手机/平板用浏览器打开即可使用，也可“添加到主屏幕”像 App 一样用。<br>数据 = 每台设备浏览器本地 + 云端同步（多设备互通）。' + (isDemo ? '' : '<br><b>正式版：</b>https://breeze-suchJB.github.io/banzhuren-workbench/ ｜ <b>给同事的演示版：</b>https://breeze-suchJB.github.io/banzhuren-workbench-clean/（不含你的数据）')) +
     sec('二、数据与多设备同步', '· 数据存在每台设备的浏览器本地；云端 = Supabase。<br>· 新设备打开会自动内置配置并拉取；也可在 数据管理→云同步 手动填写（项目地址 + anon 公钥）→“保存并立即同步”。<br>· 本机修改约 2 秒自动上传；自动拉取间隔可调（5/10/15/30/60 秒，默认 10 秒）。<br>· 其他设备需在线 + 最新版，刷新/重开一次即可拿到最新。') +
     sec('三、各功能板块', '<div class="help-grid">' + modHtml + '</div>') +
     sec('四、常用操作', '· <b>备份</b>：数据管理 → 导出 JSON 完整备份（重要操作前先备份）。<br>· <b>导入学生</b>：学生管理 → 导入 CSV（表头含：学号,姓名,性别,住校,职务,家庭情况,家长1姓名,家长1关系,家长1手机号,家长2姓名,家长2关系,家长2手机号,监护人,入学日期,小组编号,预警标签,标签）。<br>· <b>导入成绩</b>：成绩录入 → 打开考试 → “📄 空白模板”→ 填好 → “📥 导入 CSV” → 保存成绩。<br>· <b>按时间段导出</b>：导出学生 CSV 时可选起止日期，自动附带期内考勤/积分/违纪/沟通统计。<br>· <b>科目顺序</b>：成绩录入/个人成绩/班级成员成绩 → “编辑科目”可拖动或 ◀▶ 调整，三处一致。<br>· <b>留痕</b>：工作日志、德育活动可拍照/上传截图，自动压缩。<br>· <b>值日/座位</b>：值日可“一键轮换”“自动刷新名单”；座位支持两人同桌、随机分配、自动适配人数。') +
