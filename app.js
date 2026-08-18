@@ -1,5 +1,5 @@
 /* 构建版本 */
-const APP_VERSION = '20260818-013403';
+const APP_VERSION = '20260819-004258';
 /* ================= 数据层 ================= */
 const STORAGE_KEY = 'banzhuren_workbench_v1';
 const NO_DEMO_KEY = 'banzhuren_no_demo';
@@ -585,6 +585,7 @@ const DB = {
   },
   resetDemo() {
     /* 保留用户设置（云同步配置/仪表盘/科目顺序等），演示数据不自动上传云端 */
+    if (this.data && this.data.settings) delete this.data.settings.cleanSlate;
     let oldSettings = null;
     try { if (this.data && this.data.settings) oldSettings = JSON.parse(JSON.stringify(this.data.settings)); } catch (e) {}
     this.data = demoData();
@@ -606,6 +607,7 @@ const DB = {
       localStorage.setItem(NO_DEMO_KEY, '1');
     } catch (e) {}
     this.data = this.normalize(blankData());
+    if (this.data.settings) this.data.settings.cleanSlate = true;  /* 清净状态：不自动上传/拉取，避免云端数据回流 */
     this.save();
   },
   clearBusinessData() {

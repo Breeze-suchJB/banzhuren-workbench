@@ -1185,7 +1185,7 @@ const SyncEngine = {
   },
   _onLocalChange: function () {
     if (this._applying || !this.enabled()) return;
-    if (DB.data.settings && DB.data.settings.demoMode) { this._dirty = true; this._setStatus('演示数据模式：不会自动上传云端（避免覆盖真实数据）', 'orange'); return; }
+    if (DB.data.settings && (DB.data.settings.demoMode || DB.data.settings.cleanSlate)) { this._dirty = true; this._setStatus('已清空/演示模式：不会自动上传云端，需手动点“立即上传到云端”', 'orange'); return; }
     this._dirty = true;
     this._setStatus('本地有未同步修改，稍后自动上传…', 'orange');
     clearTimeout(this._pushT);
@@ -1234,7 +1234,7 @@ const SyncEngine = {
   },
   push: async function () {
     if (!this.enabled() || this._busy) return;
-    if (DB.data.settings && DB.data.settings.demoMode) { this._setStatus('演示数据模式：不会上传云端（可先拉取真实数据，或录入真实数据后点“保存并立即同步”上传）', 'orange'); return; }
+    if (DB.data.settings && (DB.data.settings.demoMode || DB.data.settings.cleanSlate)) { this._setStatus('已清空/演示模式：不会上传云端（点“立即上传到云端”可手动上传）', 'orange'); return; }
     this._busy = true;
     this._setStatus('正在上传同步…', 'blue');
     try {
@@ -1291,8 +1291,9 @@ const SyncEngine = {
     }
   },
   _pullSilent: function () {
-    /* 自动拉取：本地有未同步修改时跳过，避免覆盖刚输入的内容（稍后会由 push 合并上传） */
+    /* 自动拉取：清净状态跳过（避免云端旧数据回流）；本地有未同步修改时也跳过 */
     if (!this.enabled() || this._busy || this._dirty) return;
+    if (DB.data.settings && DB.data.settings.cleanSlate) return;
     const self = this;
     this._pull(true, false).catch(function () {});
   },
@@ -1348,7 +1349,7 @@ const SyncEngine = {
         s2.lastSyncAt = syncNowIso();
         s2.lastError = '';
         this._dirty = false;
-        if (DB.data.settings) DB.data.settings.demoMode = false;  /* 拉取到真实数据后退出演示模式 */
+        if (DB.data.settings) { DB.data.settings.demoMode = false; DB.data.settings.cleanSlate = false; }  /* 拉取到真实数据后恢复正常同步 */
         DB.save();
       } finally { this._applying = false; }
       render();
@@ -1953,8 +1954,8 @@ const ACTIONS = {
   examSubjectEditDone: function () { closeModal(); render(); },
   pushNow: function () {
     if (typeof SyncEngine === 'undefined' || !SyncEngine.enabled()) { toast('请先填写并保存云同步配置', 'err'); return; }
-    if (DB.data.settings.demoMode) { DB.data.settings.demoMode = false; toast('已退出演示模式，正在上传…'); }
-    else { toast('正在上传到云端…'); }
+    if (DB.data.settings) { DB.data.settings.demoMode = false; DB.data.settings.cleanSlate = false; }
+    toast('正在上传到云端…');
     SyncEngine._dirty = true;
     SyncEngine._driverCache = null;
     SyncEngine._saveMeta();
@@ -2399,7 +2400,7 @@ const ACTIONS = {
     }});
   },
   wipeAll: function () {
-    confirmBox({ title: '一键清空所有数据（本地 + 云端）', message: '将清空班级、学生、成绩、考勤等全部数据与系统设置，并删除云端同步数据；之后打开/刷新不再自动生成演示数据（如需演示可点“重新生成演示数据”）。此操作不可恢复，请先导出备份！', danger: true, okText: '一键清空', onOk: function () {
+    confirmBox({ title: '一键清空所有数据（本地 + 云端）', message: '将清空班级、学生、成绩、考勤等全部数据与系统设置，并删除云端同步数据；之后打开/刷新不再自动生成演示数据，也不会自动拉取云端旧数据（需手动点“立即上传/立即拉取”才会恢复同步）。如需演示可点“重新生成演示数据”。此操作不可恢复，请先导出备份！', danger: true, okText: '一键清空', onOk: function () {
       if (typeof SyncEngine !== 'undefined' && SyncEngine.enabled()) { SyncEngine.clearCloud(); }
       DB.wipeAll();
       render(); toast('已一键清空所有数据（本地+云端），不再自动生成演示数据');
@@ -2426,14 +2427,14 @@ const ACTIONS = {
     if (v.syncKey) s.syncKey = String(v.syncKey).trim() || 'main';
     s.deviceName = (DB.data.settings.teacherName || '我的') + '的设备';
     s.lastError = '';
-    DB.data.settings.demoMode = false;  /* 手动同步=退出演示模式，允许上传 */
+    DB.data.settings.demoMode = false; DB.data.settings.cleanSlate = false;  /* 手动同步=恢复正常上传 */
     SyncEngine._driverCache = null;
     SyncEngine._saveMeta();
     render();
     if (!SyncEngine.enabled()) { toast('已保存：云同步未启用'); return; }
     SyncEngine.push();
   },
-  syncPull: function () { SyncEngine.pull(false); },
+  syncPull: function () { if (DB.data.settings) DB.data.settings.cleanSlate = false; SyncEngine.pull(false); },
   syncDisconnect: function () {
     confirmBox({ title: '断开云同步', message: '断开后本机不再上传/下载云端数据，本地数据会完整保留；云端数据也保留，之后可随时重新连接。确定断开吗？', danger: true, okText: '断开', onOk: function () { SyncEngine.disconnect(); } });
   },
