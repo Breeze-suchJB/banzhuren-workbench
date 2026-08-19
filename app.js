@@ -1,5 +1,5 @@
 /* 构建版本 */
-const APP_VERSION = '20260819-122813';
+const APP_VERSION = '20260819-123918';
 /* ================= 数据层 ================= */
 const STORAGE_KEY = 'banzhuren_workbench_v1';
 const NO_DEMO_KEY = 'banzhuren_no_demo';
@@ -2890,7 +2890,7 @@ function shuffleArr(arr) {
 }
 function seatCellHtml(cell, stuMap) {
   const st = cell && cell.studentId ? stuMap[cell.studentId] : null;
-  return '<div class="seat-cell ' + (st ? '' : 'empty') + '" data-action="setSeat" data-row="' + (cell ? cell.row : '') + '" data-col="' + (cell ? cell.col : '') + '" title="点击安排学生">' +
+  return '<div class="seat-cell ' + (st ? '' : 'empty') + '" draggable="true" data-action="setSeat" data-row="' + (cell ? cell.row : '') + '" data-col="' + (cell ? cell.col : '') + '" title="点击可修改 · 拖动到另一人可交换座位">' +
     (st ? '<div class="sc-name">' + esc(st.name) + '</div><div class="sc-no">' + esc(st.no) + '</div>' : '空') + '</div>';
 }
 
@@ -3002,16 +3002,19 @@ function affSeatHtml() {
       const a = (seat.layout || []).find(x => x.row === r && x.col === c);
       const b = (seat.layout || []).find(x => x.row === r && x.col === c + 1);
       if (!a) break;
-      desks.push('<div class="seat-desk">' + seatCellHtml(a, stuMap) + (b ? seatCellHtml(b, stuMap) : '') + '</div>');
+      desks.push('<div class="seat-desk" draggable="true" data-row="' + r + '" data-col="' + c + '" title="拖动整桌可交换同桌">' +
+        '<span class="seat-grip" title="拖动整桌交换">⠿</span>' +
+        seatCellHtml(a, stuMap) + (b ? seatCellHtml(b, stuMap) : '') + '</div>');
     }
     rowsHtml.push('<div class="seat-row">' + desks.join('') + '</div>');
   }
-  return '<div class="card"><div class="card-title">💺 座位表 <span class="ct-sub">两人一桌（同桌），点击桌位可自由修改；各班级座位互相独立</span></div>' + seatDraftBarHtml() +
+  return '<div class="card"><div class="card-title">💺 座位表 <span class="ct-sub">两人一桌（同桌）；拖动某人可换座位、拖动整桌可换同桌；点击可修改</span></div>' + seatDraftBarHtml() +
     (seat.stage === 'top' ? '<div class="seat-stage">讲 台</div>' : '') +
     '<div class="seat-rows">' + rowsHtml.join('') + '</div>' +
     (seat.stage !== 'top' ? '<div class="seat-stage" style="margin-top:12px">讲 台</div>' : '') +
     '<div class="btn-row" style="margin-top:12px;flex-wrap:wrap">' +
     '<button class="btn small primary" data-action="randomSeats">🎲 随机分配（同桌优先男男/女女）</button>' +
+    '<button class="btn small primary" data-action="rotateSeats" title="按列轮换，同桌保持一起">🔄 一键轮换（4列）</button>' +
     '<button class="btn small primary" data-action="seatSettings">座位设置</button>' +
     '<button class="btn small danger" data-action="clearSeats">清空座位</button>' +
     (state.seatDraft ? '<button class="btn small primary" data-action="confirmSeat">✅ 确认保存</button><button class="btn small outline" data-action="cancelSeat">↩️ 放弃修改</button>' : '') +
@@ -3129,6 +3132,89 @@ function saveSeatAssign(row, col) {
   closeModal(); render();
   toast('座位已调整（待确认保存）');
 }
+function swapSeatCells(r1, c1, r2, c2) {
+  if (r1 === r2 && c1 === c2) return;
+  const seat = draftOrBegin();
+  const a = (seat.layout || []).find(x => x.row === r1 && x.col === c1);
+  const b = (seat.layout || []).find(x => x.row === r2 && x.col === c2);
+  if (!a && !b) return;
+  if (a && b) { const t = a.studentId; a.studentId = b.studentId; b.studentId = t; }
+  else { const src = (a && a.studentId) ? a : (b && b.studentId ? b : null); const dst = (a && !a.studentId) ? a : (b && !b.studentId ? b : null); if (src && dst) { dst.studentId = src.studentId; src.studentId = ''; } }
+  render(); toast('座位已调换（待确认保存）');
+}
+function swapSeatDesks(r1, c1, r2, c2) {
+  if (r1 === r2 && c1 === c2) return;
+  const seat = draftOrBegin();
+  const g = (r, c) => (seat.layout || []).find(x => x.row === r && x.col === c);
+  const swapCell = (x, y) => { if (x && y) { const t = x.studentId; x.studentId = y.studentId; y.studentId = t; } };
+  swapCell(g(r1, c1), g(r2, c2));
+  swapCell(g(r1, c1 + 1), g(r2, c2 + 1));
+  render(); toast('整桌已调换（待确认保存）');
+}
+function rotateSeatColumns() {
+  const seat = draftOrBegin();
+  const cols = seat.cols || 8;
+  let shift = 4;
+  if (cols < 8) shift = 2;
+  if (cols <= 2) { toast('列数太少，无法轮换', 'err'); return; }
+  const byKey = {};
+  (seat.layout || []).forEach(x => { byKey[x.row + '_' + x.col] = x.studentId || ''; });
+  (seat.layout || []).forEach(x => {
+    const srcCol = ((x.col - shift) % cols + cols) % cols;
+    x.studentId = byKey[x.row + '_' + srcCol] || '';
+  });
+  render(); toast('🔄 已按列轮换（同桌保持一起，待确认保存）');
+}
+document.addEventListener('dragstart', function (e) {
+  const t = e.target; if (!t || !t.closest) return;
+  const cell = t.closest('.seat-cell[draggable="true"]');
+  if (cell) {
+    e.dataTransfer.setData('text/plain', 'cell:' + cell.getAttribute('data-row') + ':' + cell.getAttribute('data-col'));
+    e.dataTransfer.effectAllowed = 'move';
+    cell.classList.add('seat-dragging'); return;
+  }
+  const desk = t.closest('.seat-desk[draggable="true"]');
+  if (desk) {
+    e.dataTransfer.setData('text/plain', 'desk:' + desk.getAttribute('data-row') + ':' + desk.getAttribute('data-col'));
+    e.dataTransfer.effectAllowed = 'move';
+    desk.classList.add('seat-dragging');
+  }
+});
+document.addEventListener('dragover', function (e) {
+  const t = e.target; if (!t || !t.closest) return;
+  if (t.closest('.seat-cell[draggable="true"]') || t.closest('.seat-desk[draggable="true"]')) {
+    e.preventDefault(); e.dataTransfer.dropEffect = 'move';
+    const h = t.closest('.seat-cell[draggable="true"], .seat-desk[draggable="true"]');
+    document.querySelectorAll('.seat-drop-over').forEach(el => el.classList.remove('seat-drop-over'));
+    if (h) h.classList.add('seat-drop-over');
+  }
+});
+document.addEventListener('dragleave', function (e) {
+  const t = e.target; if (!t || !t.closest) return;
+  const h = t.closest('.seat-drop-over');
+  if (h && !h.contains(e.relatedTarget)) h.classList.remove('seat-drop-over');
+});
+document.addEventListener('dragend', function (e) {
+  document.querySelectorAll('.seat-dragging, .seat-drop-over').forEach(el => el.classList.remove('seat-dragging', 'seat-drop-over'));
+});
+document.addEventListener('drop', function (e) {
+  const t = e.target; if (!t || !t.closest) return;
+  const from = (e.dataTransfer && e.dataTransfer.getData('text/plain')) || '';
+  if (from.indexOf('cell:') !== 0 && from.indexOf('desk:') !== 0) return;
+  e.preventDefault();
+  const cell = t.closest('.seat-cell[draggable="true"]');
+  const desk = t.closest('.seat-desk[draggable="true"]');
+  const p = from.split(':');
+  const sr = parseInt(p[1], 10), sc = parseInt(p[2], 10);
+  if (from.indexOf('cell:') === 0) {
+    if (cell) swapSeatCells(sr, sc, parseInt(cell.getAttribute('data-row'), 10), parseInt(cell.getAttribute('data-col'), 10));
+    else if (desk) swapSeatCells(sr, sc, parseInt(desk.getAttribute('data-row'), 10), parseInt(desk.getAttribute('data-col'), 10));
+  } else {
+    if (desk) swapSeatDesks(sr, sc, parseInt(desk.getAttribute('data-row'), 10), parseInt(desk.getAttribute('data-col'), 10));
+    else if (cell) { const d2 = cell.closest('.seat-desk'); swapSeatDesks(sr, sc, parseInt(d2.getAttribute('data-row'), 10), parseInt(d2.getAttribute('data-col'), 10)); }
+  }
+});
+
 function affScheduleHtml() {
   const d = DB.data;
   const periods = d.schedule.periods || [];

@@ -2228,6 +2228,7 @@ const ACTIONS = {
   setSeat: function (el) { seatAssignModal(parseInt(el.dataset.row, 10), parseInt(el.dataset.col, 10)); },
   confirmSeat: function () { confirmSeatDraft(); },
   cancelSeat: function () { cancelSeatDraft(); },
+  rotateSeats: function () { rotateSeatColumns(); },
   seatSettings: function () { seatSettingsModal(); },
   randomSeats: function () { randomSeats(); },
   saveSeatSettings: function () { saveSeatSettings(); },
