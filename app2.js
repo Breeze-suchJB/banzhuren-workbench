@@ -2212,6 +2212,14 @@ const ACTIONS = {
       }
     }});
   },
+  addFund: function () { fundFormModal(); },
+  saveFund: function () { saveFund(); },
+  delFund: function (el) {
+    confirmBox({ title: '删除班费记录', message: '确定删除这条班费收支记录吗？', danger: true, okText: '删除', onOk: function () {
+      DB.data.funds = (DB.data.funds || []).filter(x => x.id !== el.dataset.id);
+      DB.save(); closeModal(); render(); toast('班费记录已删除');
+    }});
+  },
   addVio: function () { vioFormModal(); },
   editVio: function (el) { const v = DB.data.violations.find(x => x.id === el.dataset.id); if (v) vioFormModal(v); },
   saveVio: function (el) { saveVio(el.dataset.id); },

@@ -1,5 +1,5 @@
 /* 构建版本 */
-const APP_VERSION = '20260819-124812';
+const APP_VERSION = '20260820-021214';
 /* ================= 数据层 ================= */
 const STORAGE_KEY = 'banzhuren_workbench_v1';
 const NO_DEMO_KEY = 'banzhuren_no_demo';
@@ -256,6 +256,14 @@ function demoData() {
     violations.push({ id: uid('vi'), studentId: st.id, date: dateAdd(today, -rndInt(0, 25)), type: t, desc: t + '，经批评教育后已认识到错误', handle: pick(['口头批评教育', '与家长电话沟通', '写检讨并全班通报', '课后谈话引导']) });
   }
 
+  /* 班费收支 */
+  const funds = [
+    { id: uid('fd'), date: dateAdd(today, -20), type: '收入', amount: 2400, category: '班费收缴', note: '全班 48 人 × 50 元' },
+    { id: uid('fd'), date: dateAdd(today, -12), type: '支出', amount: 260, category: '活动支出', note: '黑板报材料' },
+    { id: uid('fd'), date: dateAdd(today, -6), type: '支出', amount: 180, category: '卫生用品', note: '扫把、拖把' },
+    { id: uid('fd'), date: dateAdd(today, -2), type: '收入', amount: 120, category: '其他', note: '义卖收入' }
+  ];
+
   /* 作业 2 条 */
   const hw1Students = curClass.slice(0, 45);
   const hw2Students = curClass.slice(3, 48);
@@ -468,6 +476,7 @@ function demoData() {
     leaves,
     points,
     violations,
+    funds,
     homeworks,
     contacts,
     notices,
@@ -501,7 +510,7 @@ function emptyData() {
   const base = demoData();
   ['students', 'exams', 'scores', 'attendance', 'leaves', 'points', 'violations', 'homeworks',
    'contacts', 'notices', 'aids', 'todos', 'logs', 'talks', 'meetings', 'resources', 'recites',
-   'countdowns', 'honorsClass', 'honorsTeacher', 'activities', 'departures', 'customHolidays', 'career']
+   'countdowns', 'honorsClass', 'honorsTeacher', 'activities', 'departures', 'customHolidays', 'career', 'funds']
     .forEach(k => { base[k] = []; });
   base.fiveEval = {}; base.subjectChoices = {}; base.safety = { physical: [], retention: [], safetyLedger: [], mental: [] }; base.comments = {}; base.lessons = [];
   if (base.duties) { base.duties.days = []; base.duties.roomDuty = { days: [] }; }
@@ -513,7 +522,7 @@ function blankData() {
   const base = demoData();
   ['classes', 'students', 'exams', 'scores', 'attendance', 'leaves', 'points', 'violations', 'homeworks',
    'contacts', 'notices', 'aids', 'todos', 'logs', 'talks', 'meetings', 'resources', 'recites',
-   'countdowns', 'honorsClass', 'honorsTeacher', 'activities', 'departures', 'customHolidays', 'career']
+   'countdowns', 'honorsClass', 'honorsTeacher', 'activities', 'departures', 'customHolidays', 'career', 'funds']
     .forEach(k => { base[k] = []; });
   base.fiveEval = {}; base.subjectChoices = {}; base.safety = { physical: [], retention: [], safetyLedger: [], mental: [] }; base.comments = {}; base.lessons = [];
   base.schedule = { periods: [], grid: {} };
@@ -555,7 +564,7 @@ const DB = {
     out.version = DB_VERSION;
     ['classes', 'students', 'exams', 'scores', 'attendance', 'leaves', 'points', 'violations', 'homeworks',
      'contacts', 'notices', 'aids', 'todos', 'logs', 'talks', 'meetings', 'resources', 'recites',
-     'countdowns', 'honorsClass', 'honorsTeacher', 'activities', 'departures', 'customHolidays', 'career']
+     'countdowns', 'honorsClass', 'honorsTeacher', 'activities', 'departures', 'customHolidays', 'career', 'funds']
       .forEach(k => { if (!Array.isArray(out[k])) out[k] = []; });
     /* 座位改为按班级独立存储：seatByClass[classId]；旧版全局 seat 迁移到当前班级 */
     if (!out.seatByClass || typeof out.seatByClass !== 'object') out.seatByClass = {};
@@ -629,7 +638,7 @@ const DB = {
     const d = this.data;
     ['students', 'exams', 'scores', 'attendance', 'leaves', 'points', 'violations', 'homeworks',
      'contacts', 'notices', 'aids', 'todos', 'logs', 'talks', 'meetings', 'resources', 'recites',
-     'countdowns', 'honorsClass', 'honorsTeacher', 'activities', 'departures', 'customHolidays', 'career']
+     'countdowns', 'honorsClass', 'honorsTeacher', 'activities', 'departures', 'customHolidays', 'career', 'funds']
       .forEach(k => { d[k] = []; });
     d.fiveEval = {}; d.subjectChoices = {}; d.safety = { physical: [], retention: [], safetyLedger: [], mental: [] }; d.comments = {}; d.lessons = [];
     if (d.duties) { d.duties.days = []; d.duties.roomDuty = { days: [] }; }
@@ -649,7 +658,7 @@ const DB = {
     const empty = demoData();
     ['classes', 'students', 'exams', 'scores', 'attendance', 'leaves', 'points', 'violations', 'homeworks',
      'contacts', 'notices', 'aids', 'todos', 'logs', 'talks', 'meetings', 'resources', 'recites',
-     'countdowns', 'honorsClass', 'honorsTeacher', 'activities', 'departures', 'customHolidays', 'career']
+     'countdowns', 'honorsClass', 'honorsTeacher', 'activities', 'departures', 'customHolidays', 'career', 'funds']
       .forEach(k => { empty[k] = []; });
     empty.fiveEval = {}; empty.subjectChoices = {}; empty.safety = { physical: [], retention: [], safetyLedger: [], mental: [] }; empty.comments = {}; empty.lessons = [];
     empty.seatByClass = {}; delete empty.seat;
@@ -2675,9 +2684,9 @@ function moveExamSubjDraft(fromIdx, toIdx) {
 /* ================= 模块：班级事务（6 页签） ================= */
 function renderAffairs() {
   const tab = state.affTab || 'point';
-  const tabs = [['point', '积分'], ['vio', '违纪'], ['duty', '值日'], ['seat', '座位'], ['schedule', '课表'], ['meeting', '班会']]
+  const tabs = [['point', '积分'], ['vio', '违纪'], ['duty', '值日'], ['seat', '座位'], ['schedule', '课表'], ['meeting', '班会'], ['fund', '班费']]
     .map(t => '<button class="tab' + (tab === t[0] ? ' active' : '') + '" data-action="affTab" data-tab="' + t[0] + '">' + t[1] + '</button>').join('');
-  const body = tab === 'point' ? affPointHtml() : tab === 'vio' ? affVioHtml() : tab === 'duty' ? affDutyHtml() : tab === 'seat' ? affSeatHtml() : tab === 'schedule' ? affScheduleHtml() : affMeetingHtml();
+  const body = tab === 'point' ? affPointHtml() : tab === 'vio' ? affVioHtml() : tab === 'duty' ? affDutyHtml() : tab === 'seat' ? affSeatHtml() : tab === 'schedule' ? affScheduleHtml() : tab === 'meeting' ? affMeetingHtml() : affFundHtml();
   return '<div class="page-title">🗂️ 班级事务</div><div class="page-sub">' + esc(currentClass() ? currentClass().name : '') + ' · 积分、违纪、值日、座位、课表与班会</div><div class="tabs">' + tabs + '</div>' + body;
 }
 function affPointHtml() {
@@ -2723,6 +2732,53 @@ function savePoint() {
   if (st) st.score = (st.score || 0) + val;
   DB.save(); closeModal(); render();
   toast('积分已记录');
+}
+function affFundHtml() {
+  const d = DB.data;
+  const funds = (d.funds || []).slice().sort((a, b) => a.date > b.date ? -1 : 1);
+  const income = funds.filter(f => f.type === '收入').reduce((s, f) => s + (parseFloat(f.amount) || 0), 0);
+  const expense = funds.filter(f => f.type === '支出').reduce((s, f) => s + (parseFloat(f.amount) || 0), 0);
+  const balance = income - expense;
+  const rows = funds.map(f => {
+    const isIn = f.type === '收入';
+    return '<tr><td class="center">' + esc(f.date) + '</td>' +
+      '<td class="center"><span class="badge ' + (isIn ? 'green' : 'red') + '">' + esc(f.type) + '</span></td>' +
+      '<td>' + esc(f.category || '') + '</td>' +
+      '<td class="num" style="font-weight:800;color:' + (isIn ? 'var(--ok)' : 'var(--danger)') + '">' + (isIn ? '+' : '-') + '¥' + esc(f.amount) + '</td>' +
+      '<td>' + esc(f.note || '') + '</td>' +
+      '<td class="actions"><button class="btn btn-ico danger" data-action="delFund" data-id="' + f.id + '">🗑️</button></td></tr>';
+  }).join('');
+  return '<div class="grid-3" style="margin-bottom:14px">' +
+    '<div class="stat-card"><div class="card-title">💰 总收入</div><div class="stat-num" style="color:var(--ok)">¥' + income.toFixed(2) + '</div></div>' +
+    '<div class="stat-card"><div class="card-title">💸 总支出</div><div class="stat-num" style="color:var(--danger)">¥' + expense.toFixed(2) + '</div></div>' +
+    '<div class="stat-card"><div class="card-title">🏦 结余</div><div class="stat-num" style="color:' + (balance >= 0 ? 'var(--text)' : 'var(--danger)') + '">¥' + balance.toFixed(2) + '</div></div></div>' +
+    '<div class="card"><div class="card-title">🧾 班费收支明细</div><div class="btn-row" style="margin-bottom:10px"><button class="btn primary small" data-action="addFund">＋ 记一笔</button></div>' +
+    '<div class="table-wrap" style="max-height:480px;overflow:auto"><table class="tbl"><thead><tr><th>日期</th><th>类型</th><th>分类</th><th>金额</th><th>说明</th><th>操作</th></tr></thead><tbody>' +
+    (rows || '<tr><td colspan="6">' + emptyHtml('暂无班费记录') + '</td></tr>') + '</tbody></table></div></div>';
+}
+function fundFormModal() {
+  openModal(
+    '<div class="form-grid">' +
+    field('type', '类型', '收入', 'select', '', optionsHtml(['收入', '支出'], '收入')) +
+    field('amount', '金额（元）', '', 'number', 'min="0" step="0.01"') +
+    field('date', '日期', todayStr(), 'date') +
+    field('category', '分类', '', 'text', 'placeholder="如：班费收缴 / 活动支出 / 卫生用品"') +
+    field('note', '说明', '', 'text', 'full') +
+    '</div>',
+    { title: '记一笔班费' }
+  );
+  const foot = modalFootHtml('<button class="btn primary" data-action="saveFund">保存</button>');
+  document.getElementById('modalBox').insertAdjacentHTML('beforeend', foot);
+}
+function saveFund() {
+  const v = readFields();
+  const amt = parseFloat(v.amount);
+  if (!v.amount || isNaN(amt) || amt < 0) { toast('请填写正确的金额', 'err'); return; }
+  const d = DB.data;
+  if (!Array.isArray(d.funds)) d.funds = [];
+  d.funds.push({ id: uid('fd'), date: v.date || todayStr(), type: v.type === '支出' ? '支出' : '收入', amount: amt, category: v.category || '', note: v.note || '' });
+  DB.save(); closeModal(); render();
+  toast('班费已记录');
 }
 function affVioHtml() {
   const d = DB.data;
