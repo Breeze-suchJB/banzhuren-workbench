@@ -1,5 +1,5 @@
 /* 构建版本 */
-const APP_VERSION = '20260819-123918';
+const APP_VERSION = '20260819-124812';
 /* ================= 数据层 ================= */
 const STORAGE_KEY = 'banzhuren_workbench_v1';
 const NO_DEMO_KEY = 'banzhuren_no_demo';
@@ -3014,7 +3014,7 @@ function affSeatHtml() {
     (seat.stage !== 'top' ? '<div class="seat-stage" style="margin-top:12px">讲 台</div>' : '') +
     '<div class="btn-row" style="margin-top:12px;flex-wrap:wrap">' +
     '<button class="btn small primary" data-action="randomSeats">🎲 随机分配（同桌优先男男/女女）</button>' +
-    '<button class="btn small primary" data-action="rotateSeats" title="按列轮换，同桌保持一起">🔄 一键轮换（4列）</button>' +
+    '<button class="btn small primary" data-action="rotateSeats" title="整列左移轮换，同桌保持一起（1234→2341）">🔄 一键轮换（列）</button>' +
     '<button class="btn small primary" data-action="seatSettings">座位设置</button>' +
     '<button class="btn small danger" data-action="clearSeats">清空座位</button>' +
     (state.seatDraft ? '<button class="btn small primary" data-action="confirmSeat">✅ 确认保存</button><button class="btn small outline" data-action="cancelSeat">↩️ 放弃修改</button>' : '') +
@@ -3154,16 +3154,17 @@ function swapSeatDesks(r1, c1, r2, c2) {
 function rotateSeatColumns() {
   const seat = draftOrBegin();
   const cols = seat.cols || 8;
-  let shift = 4;
-  if (cols < 8) shift = 2;
-  if (cols <= 2) { toast('列数太少，无法轮换', 'err'); return; }
+  const deskCols = Math.floor(cols / 2);   /* 桌面列数：每列两张座位（同桌捆绑） */
+  if (deskCols <= 1) { toast('列数太少，无法轮换', 'err'); return; }
   const byKey = {};
   (seat.layout || []).forEach(x => { byKey[x.row + '_' + x.col] = x.studentId || ''; });
   (seat.layout || []).forEach(x => {
-    const srcCol = ((x.col - shift) % cols + cols) % cols;
-    x.studentId = byKey[x.row + '_' + srcCol] || '';
+    const desk = Math.floor(x.col / 2);
+    const fromDesk = (desk + 1) % deskCols;   /* 左移一位：1234 -> 2341 */
+    const fromCol = fromDesk * 2 + (x.col % 2);
+    x.studentId = byKey[x.row + '_' + fromCol] || '';
   });
-  render(); toast('🔄 已按列轮换（同桌保持一起，待确认保存）');
+  render(); toast('🔄 已按列轮换（1234→2341，同桌保持一起，待确认保存）');
 }
 document.addEventListener('dragstart', function (e) {
   const t = e.target; if (!t || !t.closest) return;
