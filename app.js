@@ -1,5 +1,5 @@
 /* 构建版本 */
-const APP_VERSION = '20260819-110912';
+const APP_VERSION = '20260819-121642';
 /* ================= 数据层 ================= */
 const STORAGE_KEY = 'banzhuren_workbench_v1';
 const NO_DEMO_KEY = 'banzhuren_no_demo';
@@ -2993,7 +2993,10 @@ function affSeatHtml() {
   const stuMap = {};
   currentStudents().forEach(s => { stuMap[s.id] = s; });
   const rowsHtml = [];
-  for (let r = 0; r < (seat.rows || 6); r++) {
+  const totalRows = seat.rows || 6;
+  const bottomStage = seat.stage === 'bottom';
+  for (let i = 0; i < totalRows; i++) {
+    const r = bottomStage ? (totalRows - 1 - i) : i;  /* 讲台在下时，第一排(row 0)显示在最下面，靠近讲台 */
     const desks = [];
     for (let c = 0; c < (seat.cols || 8); c += 2) {
       const a = (seat.layout || []).find(x => x.row === r && x.col === c);
