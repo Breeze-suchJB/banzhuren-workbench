@@ -2511,6 +2511,7 @@ const ACTIONS = {
   openDay: function (el) { openDayModal(el.dataset.date); },
   calAddTodo: function (el) { closeModal(); todoFromCalendarModal(el.dataset.date); },
   calAddHoliday: function (el) { closeModal(); customHolidayModal(el.dataset.date); },
+  addCustomHoliday: function () { customHolidayModal(''); },
   saveCustomHoliday: function () { saveCustomHoliday(); },
   delCustomHoliday: function (el) {
     confirmBox({ title: '删除自定义节假日', message: '确定删除这个自定义节假日吗？', danger: true, okText: '删除', onOk: function () {
