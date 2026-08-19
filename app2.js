@@ -1753,7 +1753,8 @@ const state = {
   gradeTab: 'entry', attTab: 'daily', hwTab: 'list', affTab: 'point', moralTab: 'class',
   contactTab: 'book', evalTab: 'comment', workTab: 'todo', safeTab: 'physical',
   assistTab: 'talk', subjTab: 'lesson', legalRange: '90',
-  attDate: '', leaveFilter: '全部', showFullPhone: '', cmpA: '', cmpB: '', studentSort: { key: '', dir: 1 }
+  attDate: '', leaveFilter: '全部', showFullPhone: '', cmpA: '', cmpB: '', studentSort: { key: '', dir: 1 },
+  seatDraft: null
 };
 const MODULE_RENDER = {
   dashboard: renderDashboard,
@@ -1957,8 +1958,8 @@ const ACTIONS = {
   goSettings: function () { state.module = 'datamgr'; render(); },
 
   /* 班级 */
-  setCurClass: function (el) { DB.data.settings.currentClassId = el.dataset.id; DB.save(); closeModal(); render(); toast('已切换仪表盘班级'); },
-  openClass: function (el) { DB.data.settings.currentClassId = el.dataset.id; DB.save(); state.module = 'students'; render(); },
+  setCurClass: function (el) { DB.data.settings.currentClassId = el.dataset.id; if (typeof discardSeatDraft === 'function') discardSeatDraft(); DB.save(); closeModal(); render(); toast('已切换仪表盘班级'); },
+  openClass: function (el) { DB.data.settings.currentClassId = el.dataset.id; if (typeof discardSeatDraft === 'function') discardSeatDraft(); DB.save(); state.module = 'students'; render(); },
   addClass: function () { classFormModal(); },
   editClass: function (el) { const c = getClass(el.dataset.id); if (c) classFormModal(c); },
   saveClass: function (el) { saveClass(el.dataset.id); },
@@ -1999,7 +2000,8 @@ const ACTIONS = {
       d.recites = d.recites.filter(x => x.studentId !== id);
       d.departures = d.departures.filter(x => x.studentId !== id);
       d.career = d.career.filter(x => x.studentId !== id);
-      d.seat.layout.forEach(cell => { if (cell.studentId === id) cell.studentId = ''; });
+      if (d.seatByClass) Object.keys(d.seatByClass).forEach(function (cid) { (d.seatByClass[cid].layout || []).forEach(function (cell) { if (cell.studentId === id) cell.studentId = ''; }); });
+      if (state.seatDraft && state.seatDraft.seat) (state.seatDraft.seat.layout || []).forEach(function (cell) { if (cell.studentId === id) cell.studentId = ''; });
       DB.save(); closeDrawer(); render(); toast('学生已删除');
     }});
   },
@@ -2224,13 +2226,16 @@ const ACTIONS = {
   rotateDuty: function () { rotateDuty(); },
   autoRoomDuty: function () { autoRoomDuty(); },
   setSeat: function (el) { seatAssignModal(parseInt(el.dataset.row, 10), parseInt(el.dataset.col, 10)); },
+  confirmSeat: function () { confirmSeatDraft(); },
+  cancelSeat: function () { cancelSeatDraft(); },
   seatSettings: function () { seatSettingsModal(); },
   randomSeats: function () { randomSeats(); },
   saveSeatSettings: function () { saveSeatSettings(); },
   clearSeats: function () {
-    confirmBox({ title: '清空座位', message: '确定清空所有座位安排吗？', danger: true, okText: '清空', onOk: function () {
-      DB.data.seat.layout.forEach(c => { c.studentId = ''; });
-      DB.save(); closeModal(); render(); toast('座位已清空');
+    confirmBox({ title: '清空座位', message: '确定清空当前班级的所有座位安排吗？其他班级不受影响。', danger: true, okText: '清空', onOk: function () {
+      const seat = (typeof draftOrBegin === 'function') ? draftOrBegin() : (DB.data.seat || { layout: [] });
+      (seat.layout || []).forEach(c => { c.studentId = ''; });
+      closeModal(); render(); toast('座位已清空（请点“确认保存”生效）');
     }});
   },
   saveSeatAssign: function (el) { saveSeatAssign(parseInt(el.dataset.row, 10), parseInt(el.dataset.col, 10)); },
@@ -2909,6 +2914,7 @@ document.addEventListener('change', function (e) {
     render();
   } else if (t.id === 'classSelect') {
     DB.data.settings.currentClassId = t.value;
+    if (typeof discardSeatDraft === 'function' && discardSeatDraft()) toast('已放弃上个班级未保存的座位修改');
     DB.save(); closeModal(); render();
   } else if (t.id === 'studentSearch') {
     state.studentQuery = t.value;

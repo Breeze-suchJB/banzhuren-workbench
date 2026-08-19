@@ -1,5 +1,5 @@
 /* 构建版本 */
-const APP_VERSION = '20260819-022915';
+const APP_VERSION = '20260819-110912';
 /* ================= 数据层 ================= */
 const STORAGE_KEY = 'banzhuren_workbench_v1';
 const NO_DEMO_KEY = 'banzhuren_no_demo';
@@ -557,7 +557,22 @@ const DB = {
      'contacts', 'notices', 'aids', 'todos', 'logs', 'talks', 'meetings', 'resources', 'recites',
      'countdowns', 'honorsClass', 'honorsTeacher', 'activities', 'departures', 'customHolidays', 'career']
       .forEach(k => { if (!Array.isArray(out[k])) out[k] = []; });
-    if (!out.seat || typeof out.seat !== 'object') out.seat = { rows: 6, cols: 8, stage: 'top', aisles: 1, layout: [] };
+    /* 座位改为按班级独立存储：seatByClass[classId]；旧版全局 seat 迁移到当前班级 */
+    if (!out.seatByClass || typeof out.seatByClass !== 'object') out.seatByClass = {};
+    if (out.seat && typeof out.seat === 'object' && !Object.keys(out.seatByClass).length) {
+      const _cid = (out.settings && out.settings.currentClassId) || ((out.classes || [])[0] || {}).id;
+      if (_cid) out.seatByClass[_cid] = out.seat;
+    }
+    delete out.seat;
+    Object.keys(out.seatByClass).forEach(function (k) {
+      const s = out.seatByClass[k];
+      if (!s || typeof s !== 'object') { out.seatByClass[k] = { rows: 6, cols: 8, stage: 'top', aisles: 1, layout: [] }; return; }
+      if (!Array.isArray(s.layout)) s.layout = [];
+      if (!s.rows) s.rows = 6;
+      if (!s.cols) s.cols = 8;
+      if (!s.stage) s.stage = 'top';
+      if (typeof s.aisles !== 'number') s.aisles = 1;
+    });
     if (!out.schedule || !out.schedule.grid) out.schedule = { periods: [], grid: {} };
     if (!out.schedule.periods) out.schedule.periods = [];
     if (!out.schedule.grid) out.schedule.grid = {};
@@ -618,6 +633,7 @@ const DB = {
       .forEach(k => { d[k] = []; });
     d.fiveEval = {}; d.subjectChoices = {}; d.safety = { physical: [], retention: [], safetyLedger: [], mental: [] }; d.comments = {}; d.lessons = [];
     if (d.duties) { d.duties.days = []; d.duties.roomDuty = { days: [] }; }
+    if (d.seatByClass) Object.keys(d.seatByClass).forEach(function (k) { (d.seatByClass[k].layout || []).forEach(function (x) { x.studentId = ''; }); });
     if (d.seat && d.seat.layout) d.seat.layout.forEach(x => { x.studentId = ''; });
     /* 清理本地同步备份，避免“残留” */
     try {
@@ -636,6 +652,7 @@ const DB = {
      'countdowns', 'honorsClass', 'honorsTeacher', 'activities', 'departures', 'customHolidays', 'career']
       .forEach(k => { empty[k] = []; });
     empty.fiveEval = {}; empty.subjectChoices = {}; empty.safety = { physical: [], retention: [], safetyLedger: [], mental: [] }; empty.comments = {}; empty.lessons = [];
+    empty.seatByClass = {}; delete empty.seat;
     this.data = empty;
     this.save();
   }
@@ -2876,16 +2893,88 @@ function seatCellHtml(cell, stuMap) {
   return '<div class="seat-cell ' + (st ? '' : 'empty') + '" data-action="setSeat" data-row="' + (cell ? cell.row : '') + '" data-col="' + (cell ? cell.col : '') + '" title="点击安排学生">' +
     (st ? '<div class="sc-name">' + esc(st.name) + '</div><div class="sc-no">' + esc(st.no) + '</div>' : '空') + '</div>';
 }
-function ensureSeatCapacity() {
+
+/* ========== 座位：按班级独立存储 + 草稿/确认保存 ========== */
+function seatClassId() { return currentClass() ? currentClass().id : ''; }
+function seatDraft() { return state.seatDraft && state.seatDraft.classId === seatClassId() ? state.seatDraft.seat : null; }
+function savedSeatFor(cid) {
   const d = DB.data;
-  const seat = d.seat;
-  if (!seat) return;
+  if (!d.seatByClass || typeof d.seatByClass !== 'object') d.seatByClass = {};
+  return cid ? (d.seatByClass[cid] || null) : null;
+}
+function defaultSeat() { return { rows: 6, cols: 8, stage: 'top', aisles: 1, layout: [] }; }
+function fillSeatLayout(seat) {
+  if (!Array.isArray(seat.layout)) seat.layout = [];
+  const rows = seat.rows || 6, cols = seat.cols || 8;
+  if (seat.layout.length >= rows * cols) return seat;
+  const kept = seat.layout.filter(x => x.row < rows && x.col < cols);
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      if (!kept.some(x => x.row === r && x.col === c)) kept.push({ seatId: 'seat_' + r + '_' + c, row: r, col: c, studentId: '' });
+    }
+  }
+  seat.layout = kept.sort((a, b) => (a.row - b.row) || (a.col - b.col));
+  return seat;
+}
+function effectiveSeat() {
+  /* 当前班级的座位：有未保存草稿用草稿，否则用已保存的（没有则返回临时默认，不落盘） */
+  const dr = seatDraft();
+  if (dr) return dr;
+  return savedSeatFor(seatClassId()) || fillSeatLayout(defaultSeat());
+}
+function beginSeatDraft() {
+  const cid = seatClassId();
+  const src = savedSeatFor(cid) || defaultSeat();
+  const seat = fillSeatLayout(JSON.parse(JSON.stringify(src)));
+  state.seatDraft = { classId: cid, seat: seat };
+  return seat;
+}
+function draftOrBegin() { return seatDraft() || beginSeatDraft(); }
+function confirmSeatDraft() {
+  const d = DB.data;
+  if (!state.seatDraft) return;
+  const cid = state.seatDraft.classId;
+  if (cid) {
+    if (!d.seatByClass || typeof d.seatByClass !== 'object') d.seatByClass = {};
+    d.seatByClass[cid] = state.seatDraft.seat;
+    DB.save();
+  }
+  state.seatDraft = null;
+  render();
+  toast('✅ 座位已保存（仅当前班级，其他班级不受影响）');
+}
+function cancelSeatDraft() {
+  if (!state.seatDraft) return;
+  state.seatDraft = null;
+  render();
+  toast('已放弃未保存的座位修改');
+}
+function discardSeatDraft() {
+  if (state.seatDraft) { state.seatDraft = null; return true; }
+  return false;
+}
+function seatDraftBarHtml() {
+  if (!state.seatDraft) return '';
+  return '<div class="seat-draft-bar">⚠️ 当前班级座位有<b>未保存的修改</b>（切换班级不会带过去）' +
+    '<span style="flex:1"></span>' +
+    '<button class="btn small primary" data-action="confirmSeat">✅ 确认保存</button>' +
+    '<button class="btn small outline" data-action="cancelSeat">↩️ 放弃修改</button></div>';
+}
+function ensureSeatCapacity() {
   const n = currentStudents().length;
+  if (!n) return;
+  let seat = seatDraft();
+  const isDraft = !!seat;
+  if (!seat) seat = savedSeatFor(seatClassId());
+  if (!seat) seat = fillSeatLayout(defaultSeat());
   const cols = seat.cols || 8, rows = seat.rows || 6;
   let newRows = rows, newCols = cols;
   while (newRows * newCols < n && newRows < 15) newRows++;
   if (newRows * newCols < n) { newCols = Math.ceil(n / 12); newRows = Math.max(newRows, Math.ceil(n / newCols)); }
-  if (newRows !== rows || newCols !== cols) {
+  const need = newRows * newCols;
+  const curCount = (seat.layout || []).length;
+  if (newRows !== rows || newCols !== cols || curCount < need) {
+    if (!isDraft) seat = beginSeatDraft();
     seat.rows = Math.min(20, newRows);
     seat.cols = Math.min(15, newCols);
     const kept = (seat.layout || []).filter(x => x.row < seat.rows && x.col < seat.cols);
@@ -2895,13 +2984,12 @@ function ensureSeatCapacity() {
       }
     }
     seat.layout = kept.sort((a, b) => (a.row - b.row) || (a.col - b.col));
-    DB.save();
+    /* 不立即保存：等用户点“确认保存” */
   }
 }
 function affSeatHtml() {
   ensureSeatCapacity();
-  const d = DB.data;
-  const seat = d.seat;
+  const seat = effectiveSeat();
   const stuMap = {};
   currentStudents().forEach(s => { stuMap[s.id] = s; });
   const rowsHtml = [];
@@ -2915,39 +3003,35 @@ function affSeatHtml() {
     }
     rowsHtml.push('<div class="seat-row">' + desks.join('') + '</div>');
   }
-  return '<div class="card"><div class="card-title">💺 座位表 <span class="ct-sub">两人一桌（同桌），点击桌位可自由修改</span></div>' +
+  return '<div class="card"><div class="card-title">💺 座位表 <span class="ct-sub">两人一桌（同桌），点击桌位可自由修改；各班级座位互相独立</span></div>' + seatDraftBarHtml() +
     (seat.stage === 'top' ? '<div class="seat-stage">讲 台</div>' : '') +
     '<div class="seat-rows">' + rowsHtml.join('') + '</div>' +
     (seat.stage !== 'top' ? '<div class="seat-stage" style="margin-top:12px">讲 台</div>' : '') +
     '<div class="btn-row" style="margin-top:12px;flex-wrap:wrap">' +
     '<button class="btn small primary" data-action="randomSeats">🎲 随机分配（同桌优先男男/女女）</button>' +
     '<button class="btn small primary" data-action="seatSettings">座位设置</button>' +
-    '<button class="btn small danger" data-action="clearSeats">清空座位</button></div></div>';
+    '<button class="btn small danger" data-action="clearSeats">清空座位</button>' +
+    (state.seatDraft ? '<button class="btn small primary" data-action="confirmSeat">✅ 确认保存</button><button class="btn small outline" data-action="cancelSeat">↩️ 放弃修改</button>' : '') +
+    '</div></div>';
 }
 function randomSeats() {
-  const d = DB.data;
-  const seat = d.seat;
+  const seat = draftOrBegin();
   const stu = currentStudents().slice();
   if (!stu.length) { toast('当前班级暂无学生', 'err'); return; }
-  const twoSeat = [];
-  const oneSeat = [];
-  for (let r = 0; r < (seat.rows || 6); r++) {
-    for (let c = 0; c < (seat.cols || 8); c += 2) {
-      const a = (seat.layout || []).find(x => x.row === r && x.col === c);
-      const b = (seat.layout || []).find(x => x.row === r && x.col === c + 1);
-      if (a) { (b ? twoSeat : oneSeat).push([a, b || null]); }
+  let twoSeat = [], oneSeat = [];
+  const collect = function () {
+    twoSeat = []; oneSeat = [];
+    for (let r = 0; r < (seat.rows || 6); r++) {
+      for (let c = 0; c < (seat.cols || 8); c += 2) {
+        const a = (seat.layout || []).find(x => x.row === r && x.col === c);
+        const b = (seat.layout || []).find(x => x.row === r && x.col === c + 1);
+        if (a) { (b ? twoSeat : oneSeat).push([a, b || null]); }
+      }
     }
-  }
+  };
+  collect();
   ensureSeatCapacity();
-  /* 重新读取扩容后的桌面 */
-  twoSeat.length = 0; oneSeat.length = 0;
-  for (let r = 0; r < (seat.rows || 6); r++) {
-    for (let c = 0; c < (seat.cols || 8); c += 2) {
-      const a = (seat.layout || []).find(x => x.row === r && x.col === c);
-      const b = (seat.layout || []).find(x => x.row === r && x.col === c + 1);
-      if (a) { (b ? twoSeat : oneSeat).push([a, b || null]); }
-    }
-  }
+  collect();
   const capacity = twoSeat.length * 2 + oneSeat.length;
   if (stu.length > capacity) { toast('座位不足：请增大行列数', 'err'); return; }
   const boys = shuffleArr(stu.filter(s => s.gender === '男'));
@@ -2963,8 +3047,7 @@ function randomSeats() {
   if (twoPairs.length > twoSeat.length) { toast('双人桌不够：请把“列数”设为偶数或增加行数', 'err'); return; }
   seat.layout.forEach(x => { x.studentId = ''; });
   /* 前排优先：按行顺序填充，空位只会留在后排；学生配对已打乱保证随机 */
-  const twoOrder = twoSeat;
-  const oneOrder = oneSeat;
+  const twoOrder = twoSeat, oneOrder = oneSeat;
   let mixed = 0;
   twoPairs.forEach((pair, i) => {
     const desk = twoOrder[i];
@@ -2983,11 +3066,11 @@ function randomSeats() {
       if (free) { free[0].studentId = pair[0].id; twoUsed++; }
     }
   });
-  DB.save(); render();
-  toast(mixed ? '已随机分配：含 ' + mixed + ' 组男女同桌（性别不平衡），可点击桌位手动修改' : '已随机分配：同桌均为同性别，可点击桌位手动修改');
+  render();
+  toast('🎲 已生成随机座位预览（未保存）。核对后点“✅ 确认保存”生效，仅影响当前班级');
 }
 function seatSettingsModal() {
-  const seat = DB.data.seat;
+  const seat = effectiveSeat();
   openModal(
     '<div class="form-grid">' +
     field('rows', '行数', seat.rows || 6, 'number', 'min="1" max="12"') +
@@ -2997,14 +3080,13 @@ function seatSettingsModal() {
     '</div>',
     { title: '座位设置' }
   );
-  const foot = modalFootHtml('<button class="btn primary" data-action="saveSeatSettings">保存</button>');
+  const foot = modalFootHtml('<button class="btn primary" data-action="saveSeatSettings">保存（加入待确认）</button>');
   document.getElementById('modalBox').insertAdjacentHTML('beforeend', foot);
 }
 function saveSeatSettings() {
   const v = readFields();
-  const d = DB.data;
   const rows = parseInt(v.rows || '6', 10), cols = parseInt(v.cols || '8', 10);
-  const seat = d.seat;
+  const seat = draftOrBegin();
   seat.rows = Math.min(12, Math.max(1, rows));
   seat.cols = Math.min(12, Math.max(1, cols));
   seat.stage = v.stage;
@@ -3016,33 +3098,33 @@ function saveSeatSettings() {
     }
   }
   seat.layout = kept.sort((a, b) => (a.row - b.row) || (a.col - b.col));
-  DB.save(); closeModal(); render();
-  toast('座位设置已保存');
+  closeModal(); render();
+  toast('座位行列已更新（待确认保存）');
 }
 function seatAssignModal(row, col) {
-  const d = DB.data;
-  const cell = d.seat.layout.find(x => x.row === row && x.col === col);
-  const occupied = d.seat.layout.filter(x => x.studentId).map(x => x.studentId);
+  const seat = effectiveSeat();
+  const cell = (seat.layout || []).find(x => x.row === row && x.col === col);
+  const occupied = (seat.layout || []).filter(x => x.studentId).map(x => x.studentId);
   const free = currentStudents().filter(s => occupied.indexOf(s.id) < 0 || s.id === (cell || {}).studentId).sort((a, b) => a.name.localeCompare(b.name, 'zh'));
   const opt = '<option value="">（空）</option>' + free.map(s => '<option value="' + s.id + '"' + (cell && cell.studentId === s.id ? ' selected' : '') + '>' + esc(s.name) + '（' + esc(s.no) + '）</option>').join('');
   openModal(
     '<div class="field"><label>选择学生（第' + (row + 1) + '行 第' + (col + 1) + '列）</label><select data-field="studentId">' + opt + '</select></div>',
     { title: '安排座位' }
   );
-  const foot = modalFootHtml('<button class="btn primary" data-action="saveSeatAssign" data-row="' + row + '" data-col="' + col + '">保存</button>');
+  const foot = modalFootHtml('<button class="btn primary" data-action="saveSeatAssign" data-row="' + row + '" data-col="' + col + '">保存（待确认）</button>');
   document.getElementById('modalBox').insertAdjacentHTML('beforeend', foot);
 }
 function saveSeatAssign(row, col) {
   const v = readFields();
-  const d = DB.data;
-  const cell = d.seat.layout.find(x => x.row === row && x.col === col);
+  const seat = draftOrBegin();
+  const cell = (seat.layout || []).find(x => x.row === row && x.col === col);
   if (cell) {
-    const oldCell = d.seat.layout.find(x => x.studentId === v.studentId && v.studentId);
+    const oldCell = (seat.layout || []).find(x => x.studentId === v.studentId && v.studentId);
     if (oldCell) oldCell.studentId = '';
     cell.studentId = v.studentId || '';
   }
-  DB.save(); closeModal(); render();
-  toast('座位已安排');
+  closeModal(); render();
+  toast('座位已调整（待确认保存）');
 }
 function affScheduleHtml() {
   const d = DB.data;
