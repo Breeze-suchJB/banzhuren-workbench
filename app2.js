@@ -1128,6 +1128,7 @@ window.DEFAULT_SYNC = Object.assign({
   provider: 'supabase',
   supUrl: 'https://nkfspiaeelwnedsqjveq.supabase.co',  // Supabase Project URL（内置，自动恢复）
   supKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5rZnNwaWFlZWx3bmVkc3FqdmVxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY2OTQ4MzQsImV4cCI6MjEwMjI3MDgzNH0.LoE2sWBZFlQn2iLxXbJC6AKkpleSjpTAgDXtkmyl3yQ',  // anon public（公钥）
+  cbEnv: 'mywork-d1gmezh3n29b75b0b',  // 腾讯云 CloudBase 环境ID（内置，自动恢复）
   syncKey: 'main'   // 必须与你在工作台“同步空间标识”里填的一致
 }, window.DEFAULT_SYNC || {});
 
@@ -1222,14 +1223,20 @@ const SyncEngine = {
     const s = this.settings();
     if (this.enabled()) return false;                 /* 已配置过就不再覆盖 */
     const d = window.DEFAULT_SYNC || {};
-    if (!d.supUrl || !d.supKey) return false;         /* 未内置配置 */
-    s.provider = d.provider || 'supabase';
-    s.supUrl = String(d.supUrl).trim();
-    s.supKey = String(d.supKey).trim();
-    if (d.syncKey) s.syncKey = String(d.syncKey);
-    this._driverCache = null;
-    this._saveMeta();
-    return true;
+    let changed = false;
+    /* 内置腾讯云 CloudBase 环境ID：预填到设置里，切到 CloudBase 时无需再手输 */
+    if (d.cbEnv && !s.cbEnv) { s.cbEnv = String(d.cbEnv).trim(); changed = true; }
+    /* 内置 Supabase 配置（地址 + anon 公钥） */
+    if (d.supUrl && d.supKey) {
+      if (!s.provider) s.provider = d.provider || 'supabase';
+      if (s.provider === 'supabase') {
+        if (!s.supUrl) { s.supUrl = String(d.supUrl).trim(); changed = true; }
+        if (!s.supKey) { s.supKey = String(d.supKey).trim(); changed = true; }
+      }
+    }
+    if (d.syncKey && !s.syncKey) { s.syncKey = String(d.syncKey); changed = true; }
+    if (changed) { this._driverCache = null; this._saveMeta(); }
+    return changed;
   },
   init: function () {
     if (this._ready) return;
@@ -1586,8 +1593,10 @@ const SyncEngine = {
     field('syncPoll', '自动拉取间隔（秒，越快越耗电/流量）', s.pollSec || 10, 'select', '', optionsHtml(['5', '10', '15', '30', '60'], String(s.pollSec || 10)));
     const builtIn = (window.DEFAULT_SYNC && window.DEFAULT_SYNC.supUrl && s.supUrl === String(window.DEFAULT_SYNC.supUrl).trim())
       ? '<div style="font-size:12.5px;color:var(--ok, #16a34a);margin-bottom:8px">📌 已内置 Supabase 配置：更换网址/新设备打开时会自动恢复，无需重新填写。</div>' : '';
+    const builtInCB = (window.DEFAULT_SYNC && window.DEFAULT_SYNC.cbEnv && s.cbEnv === String(window.DEFAULT_SYNC.cbEnv).trim())
+      ? '<div style="font-size:12.5px;color:var(--ok, #16a34a);margin-bottom:8px">📌 已内置腾讯云 CloudBase 环境ID：更换网址/新设备打开时会自动恢复，无需重新填写。</div>' : '';
     return '<div class="card"><div class="card-title">☁️ 云同步（多设备实时同步）</div>' +
-      '<div id="syncStatus" class="sync-status">' + this.statusHtml() + '</div>' + demoNotice + builtIn +
+      '<div id="syncStatus" class="sync-status">' + this.statusHtml() + '</div>' + demoNotice + builtIn + builtInCB +
       '<div style="font-size:12.5px;color:var(--text3);margin-bottom:10px">在每台设备打开本工作台并填写<b>相同</b>的云同步凭据即可互通：本机修改约 2 秒自动上传，自动拉取间隔可调（默认 10 秒），也可手动同步。</div>' +
       '<div class="form-grid"><div class="field"><label>同步方式</label><select data-field="syncProvider">' + providerOpts + '</select></div>' + body + '</div>' +
       '<div class="btn-row" style="margin-top:12px">' +
@@ -1814,56 +1823,82 @@ function makeCloudBaseDriver() {
       if (!(hasState && hasState.user)) {
         if (auth.signInAnonymously) await auth.signInAnonymously();
         else await auth.anonymousAuthProvider().signIn();
+        /* 部分 SDK 版本在“匿名登录未开启”时不会抛错而是静默失败，这里主动校验登录态 */
+        const after = (auth.hasLoginState && auth.hasLoginState());
+        if (!(after && after.user)) {
+          throw new Error('匿名登录未开启');
+        }
       }
     } catch (e) {
-      throw new Error('CloudBase 匿名登录失败：' + errMsg(e) + '（请确认环境ID正确、已开启“匿名登录”，并把网址加入“安全域名”）');
+      const em = errMsg(e);
+      if (em.indexOf('unauthenticated') >= 0 || em.indexOf('credentials not found') >= 0 || em.indexOf('匿名登录未开启') >= 0) {
+        throw new Error('CloudBase 匿名登录未开启：请在云开发控制台「登录授权」中开启「匿名登录」（当前环境 ' + envId + '）。直达：https://tcb.cloud.tencent.com/dev?envId=' + envId + '#/identity/login-manage');
+      }
+      throw new Error('CloudBase 匿名登录失败：' + em + '（请确认环境ID正确、已开启“匿名登录”，并把网址加入“安全域名”）');
     }
     return db;
   }
   const metaId = function () { return 'meta_' + hashStr(key()); };
+  function cbErr(action, e) {
+    const em = errMsg(e);
+    if (/collection|集合|not exist|不存在/i.test(em)) {
+      return new Error('CloudBase 集合不存在或无权访问：请在控制台创建 workbench_sync_meta、workbench_sync_chunk 两个集合并设为「所有用户可读写」');
+    }
+    if (/permission|denied|deny|权限/i.test(em)) {
+      return new Error('CloudBase 数据库权限不足：请把 workbench_sync_meta、workbench_sync_chunk 权限设为「所有用户可读写」');
+    }
+    return new Error(action + '：' + em);
+  }
   return {
     type: 'cloudbase',
     getMeta: async function () {
       const d = await ensure();
-      const res = await d.collection('workbench_sync_meta').doc(metaId()).get();
-      const rows = (res && res.data) || [];
-      if (!rows.length) return null;
-      const m = rows[0];
-      return { syncKey: m.syncKey, rev: m.rev || 0, updatedAt: m.updatedAt || '', deviceId: m.deviceId || '', checksum: m.checksum || '', size: m.size || 0, enc: m.enc || 'none' };
+      try {
+        const res = await d.collection('workbench_sync_meta').doc(metaId()).get();
+        const rows = (res && res.data) || [];
+        if (!rows.length) return null;
+        const m = rows[0];
+        return { syncKey: m.syncKey, rev: m.rev || 0, updatedAt: m.updatedAt || '', deviceId: m.deviceId || '', checksum: m.checksum || '', size: m.size || 0, enc: m.enc || 'none' };
+      } catch (e) { throw cbErr('读取云端版本失败', e); }
     },
     fetchPayload: async function () {
       const d = await ensure();
-      const res = await d.collection('workbench_sync_chunk').where({ syncKey: key() }).limit(1000).get();
-      const rows = (res && res.data) || [];
-      if (!rows.length) throw new Error('云端没有数据块');
-      rows.sort(function (a, b) { return (a.idx || 0) - (b.idx || 0); });
-      let out = '';
-      rows.forEach(function (r) { out += r.payload || ''; });
-      return out;
+      try {
+        const res = await d.collection('workbench_sync_chunk').where({ syncKey: key() }).limit(1000).get();
+        const rows = (res && res.data) || [];
+        if (!rows.length) throw new Error('云端没有数据块');
+        rows.sort(function (a, b) { return (a.idx || 0) - (b.idx || 0); });
+        let out = '';
+        rows.forEach(function (r) { out += r.payload || ''; });
+        return out;
+      } catch (e) { if (e && e.message === '云端没有数据块') throw e; throw cbErr('读取云端数据失败', e); }
     },
     push: async function (payload, meta) {
       const d = await ensure();
       const k = key();
-      /* 先删旧块，再传新块，最后写 meta（保证 meta.rev 永远指向完整数据） */
-      try { await d.collection('workbench_sync_chunk').where({ syncKey: k }).remove(); } catch (e) {}
-      const chunks = [];
-      for (let i = 0; i < payload.length; i += SYNC_CHUNK_SIZE) chunks.push(payload.slice(i, i + SYNC_CHUNK_SIZE));
-      for (let i = 0; i < chunks.length; i++) {
-        await d.collection('workbench_sync_chunk').doc('chunk_' + hashStr(k) + '_' + i).set({ syncKey: k, idx: i, total: chunks.length, payload: chunks[i], rev: meta.rev, deviceId: meta.deviceId });
-      }
-      await d.collection('workbench_sync_meta').doc(metaId()).set({ syncKey: k, rev: meta.rev, updatedAt: meta.updatedAt, deviceId: meta.deviceId, checksum: meta.checksum, size: meta.size, enc: meta.enc });
+      try {
+        /* 先删旧块，再传新块，最后写 meta（保证 meta.rev 永远指向完整数据） */
+        try { await d.collection('workbench_sync_chunk').where({ syncKey: k }).remove(); } catch (e) {}
+        const chunks = [];
+        for (let i = 0; i < payload.length; i += SYNC_CHUNK_SIZE) chunks.push(payload.slice(i, i + SYNC_CHUNK_SIZE));
+        for (let i = 0; i < chunks.length; i++) {
+          await d.collection('workbench_sync_chunk').doc('chunk_' + hashStr(k) + '_' + i).set({ syncKey: k, idx: i, total: chunks.length, payload: chunks[i], rev: meta.rev, deviceId: meta.deviceId });
+        }
+        await d.collection('workbench_sync_meta').doc(metaId()).set({ syncKey: k, rev: meta.rev, updatedAt: meta.updatedAt, deviceId: meta.deviceId, checksum: meta.checksum, size: meta.size, enc: meta.enc });
+      } catch (e) { throw cbErr('上传云端失败', e); }
     },
     deleteRemote: async function () {
       const d = await ensure();
       const k = key();
-      let n = 0;
-      try { const r = await d.collection('workbench_sync_chunk').where({ syncKey: k }).remove(); n += (r && r.deleted) || 0; } catch (e) {}
-      try { const r = await d.collection('workbench_sync_meta').doc(metaId()).remove(); n += (r && r.deleted) || 0; } catch (e) {}
-      return n;
+      try {
+        let n = 0;
+        try { const r = await d.collection('workbench_sync_chunk').where({ syncKey: k }).remove(); n += (r && r.deleted) || 0; } catch (e) {}
+        try { const r = await d.collection('workbench_sync_meta').doc(metaId()).remove(); n += (r && r.deleted) || 0; } catch (e) {}
+        return n;
+      } catch (e) { throw cbErr('清除云端数据失败', e); }
     }
   };
 }
-
 /* ================= 应用核心 ================= */
 const state = {
   module: 'dashboard',
