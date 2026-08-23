@@ -1852,7 +1852,7 @@ function makeCloudBaseDriver() {
         throw new Error('CloudBase 登录被拒绝（' + em + '）：① 请在云开发控制台「登录授权」中开启「匿名登录」（当前环境 ' + envId + '，地域 ' + region + '），直达：https://tcb.cloud.tencent.com/dev?envId=' + envId + '#/identity/login-manage；② 确认云同步卡片的「地域（region）」与你的环境实际地域一致（环境概览可查：上海 ap-shanghai / 广州 ap-guangzhou / 北京 ap-beijing…），地域不对会报同样的错。');
       }
       if (low.indexOf('failed to fetch') >= 0 || low.indexOf('networkerror') >= 0 || low.indexOf('load failed') >= 0 || low.indexOf('cors') >= 0 || low.indexOf('network') >= 0) {
-        throw new Error('CloudBase 请求被浏览器拦截或网络不通（CORS/跨域）：请在云开发控制台把工作台网址加入「安全域名」（环境 → 环境配置/设置 → 安全来源/安全配置 → 安全域名 → 添加域名：' + location.origin + '；免费版无此入口请用 CloudBase 静态托管默认网址打开），并确认网络正常、云同步卡片的「地域（region）」与你环境一致（当前 ' + region + '）。');
+        throw new Error('CloudBase 请求被浏览器拦截或网络不通（CORS/跨域）：请在云开发控制台把工作台网址加入「安全域名」（环境 → 环境配置/设置 → 安全来源/安全配置 → 安全域名 → 添加域名：' + location.origin + '；免费版无此入口请用 CloudBase 静态托管默认网址打开），并确认网络正常、云同步卡片的「地域（region）」与你环境一致（当前 ' + region + '）。原始错误：' + em);
       }
       throw new Error('CloudBase 登录失败：' + em + '（请确认：环境ID正确；「地域（region）」与环境一致（当前 ' + region + '）；已开启“匿名登录”；网址已加入“安全域名”）');
     }
@@ -3203,7 +3203,7 @@ function setupPWA() {
     document.head.appendChild(at);
   }
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('sw.js').catch(function () {});
+    navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(function (reg) { if (reg && reg.update) reg.update().catch(function () {}); }).catch(function () {});
   }
 }
 function init() {

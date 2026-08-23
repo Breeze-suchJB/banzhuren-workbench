@@ -1,5 +1,5 @@
 /* 班主任智能工作台 Service Worker */
-const CACHE_NAME = 'banzhuren-workbench-20260823-215534';
+const CACHE_NAME = 'banzhuren-workbench-20260823-224905';
 const ASSETS = [
   './',
   './index.html',
@@ -26,6 +26,22 @@ self.addEventListener('activate', (event) => {
 });
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
+  const reqUrl = event.request.url;
+  /* sw.js 永远走网络、绝不缓存：否则旧缓存永远不更新 */
+  if (/\/sw\.js(\?|$)/.test(reqUrl)) { event.respondWith(fetch(event.request).catch(() => caches.match(event.request))); return; }
+  /* 页面导航用网络优先：总是先拿最新 HTML，断网时才用缓存 */
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request)
+        .then((res) => {
+          if (res && res.status === 200) { const clone = res.clone(); caches.open(CACHE_NAME).then((c) => c.put(event.request, clone)); }
+          return res;
+        })
+        .catch(() => caches.match(event.request))
+    );
+    return;
+  }
+  /* 静态资源：缓存优先（版本更新时新缓存名会自动全量刷新） */
   event.respondWith(
     caches.match(event.request).then((cached) => {
       const fetched = fetch(event.request)
