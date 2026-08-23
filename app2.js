@@ -1841,6 +1841,9 @@ function makeCloudBaseDriver() {
   const metaId = function () { return 'meta_' + hashStr(key()); };
   function cbErr(action, e) {
     const em = errMsg(e);
+    if (/no document database|document database instance|ExecutePGSql|postgres/i.test(em)) {
+      return new Error('你的 CloudBase 环境是 PostgreSQL（SQL）类型，没有「文档型数据库」：本工作台的 CloudBase 同步需要文档型数据库（集合）。请在控制台新建一个包含「文档型数据库」的环境（不要选 PG 模式/只选 PostgreSQL），或改用 Supabase / LeanCloud 同步。');
+    }
     if (/collection|集合|not exist|不存在/i.test(em)) {
       return new Error('CloudBase 集合不存在或无权访问：请在控制台创建 workbench_sync_meta、workbench_sync_chunk 两个集合并设为「所有用户可读写」');
     }
