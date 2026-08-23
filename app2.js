@@ -1101,8 +1101,8 @@ function renderHelp() {
     ['为什么手机删学生电脑能同步，但“一键清空”不能？', '普通修改（如删学生）是增量同步：云端版本+1，其他设备拉取新版本即可，很稳定。“一键清空”是“推翻一切”的特殊操作，要求其他设备在线、是最新版、云端允许写入清空标记、且本地没有未上传改动，任一不满足就不同步。所以清空请在每一台设备上各执行一次。'],
     ...(isDemo ? [] : [['换电脑 / 新设备怎么用？', '直接用浏览器打开正式版链接：https://breeze-suchJB.github.io/banzhuren-workbench/ 。首次打开会自动内置 Supabase 配置并拉取云端数据，请先等它拉取完成再录入，避免覆盖云端。']]),
     ['演示数据会传到云端吗？', '不会自动上传：重新生成演示数据后进入“演示模式”，本地改动不会自动上传，避免覆盖真实数据。确认要上传时，点“📤 立即上传到云端”。'],
-    ['云同步失败怎么办？', '检查网络；确认 Supabase 地址和 anon 公钥无误；Supabase 表需允许读写（RLS 关闭或授权）。可在云同步卡片点“🔍 检测云端”看云端到底有没有数据。'],
-    ['清空后数据又回来了？', '本地刷新不会回来（清净状态）。若你“立即拉取”又拉回旧数据，说明云端没删干净：在 Supabase SQL Editor 执行 delete from workbench_sync; 或检查表权限。'],
+    ['云同步失败怎么办？', '检查网络；确认配置无误（Supabase：地址 + anon 公钥；CloudBase：环境ID + 开启匿名登录 + 安全域名；LeanCloud：AppID/AppKey）。数据库需允许读写（Supabase 关 RLS 或授权；CloudBase 权限设为“所有用户可读写”）。可在云同步卡片点“🔍 检测云端”看云端到底有没有数据。'],
+    ['清空后数据又回来了？', '本地刷新不会回来（清净状态）。若你“立即拉取”又拉回旧数据，说明云端没删干净：Supabase 在 SQL Editor 执行 delete from workbench_sync;（CloudBase 删除 workbench_sync_meta / workbench_sync_chunk 两个集合的数据），或检查表权限。'],
     ['怎样彻底隔离旧数据，防止弄混？', '把“同步空间标识”换成一个新名字（例如 real2026），旧数据在旧标识下，永远混不进来；所有设备用同一个新标识即可互通。'],
     ['成绩 CSV 导不进去？', '用“空白模板”，不要改表头；Excel 另存的 CSV（GBK 编码）我们已自动兼容；学号前导零（001→1）也能匹配；导入后点“保存成绩”生效。'],
     ['同步/拉取很慢？', '可在云同步里调“自动拉取间隔”（5~60 秒，默认 10 秒）；留痕照片会自动压缩，避免拖慢同步。']
@@ -1110,14 +1110,14 @@ function renderHelp() {
   const faqHtml = faq.map(q => '<div class="help-faq"><div class="hf-q">❓ ' + q[0] + '</div><div class="hf-a">' + q[1] + '</div></div>').join('');
   return '<div class="page-title">📖 使用帮助</div><div class="page-sub">工作台使用手册 · 当前版本 v' + ver + '</div>' +
     sec('一、这是什么、怎么打开', '这是一个<b>网页应用</b>：电脑/手机/平板用浏览器打开即可使用，也可“添加到主屏幕”像 App 一样用。<br>数据 = 每台设备浏览器本地 + 云端同步（多设备互通）。' + (isDemo ? '' : '<br><b>正式版：</b>https://breeze-suchJB.github.io/banzhuren-workbench/ ｜ <b>给同事的演示版：</b>https://breeze-suchJB.github.io/banzhuren-workbench-clean/（不含你的数据）')) +
-    sec('二、数据与多设备同步', '· 数据存在每台设备的浏览器本地；云端 = Supabase。<br>· 新设备打开会自动内置配置并拉取；也可在 数据管理→云同步 手动填写（项目地址 + anon 公钥）→“保存并立即同步”。<br>· 本机修改约 2 秒自动上传；自动拉取间隔可调（5/10/15/30/60 秒，默认 10 秒）。<br>· 其他设备需在线 + 最新版，刷新/重开一次即可拿到最新。') +
+    sec('二、数据与多设备同步', '· 数据存在每台设备的浏览器本地；云端 = Supabase / 腾讯云 CloudBase 等（在 数据管理→云同步 选择）。<br>· 新设备打开会自动内置配置并拉取；也可在 数据管理→云同步 手动填写对应凭据（如 Supabase 项目地址 + anon 公钥）→“保存并立即同步”。<br>· 本机修改约 2 秒自动上传；自动拉取间隔可调（5/10/15/30/60 秒，默认 10 秒）。<br>· 其他设备需在线 + 最新版，刷新/重开一次即可拿到最新。') +
     sec('三、各功能板块', '<div class="help-grid">' + modHtml + '</div>') +
     sec('四、常用操作', '· <b>备份</b>：数据管理 → 导出 JSON 完整备份（重要操作前先备份）。<br>· <b>导入学生</b>：学生管理 → 导入 CSV（表头含：学号,姓名,性别,住校,职务,家庭情况,家长1姓名,家长1关系,家长1手机号,家长2姓名,家长2关系,家长2手机号,监护人,入学日期,小组编号,预警标签,标签）。<br>· <b>导入成绩</b>：成绩录入 → 打开考试 → “📄 空白模板”→ 填好 → “📥 导入 CSV” → 保存成绩。<br>· <b>按时间段导出</b>：导出学生 CSV 时可选起止日期，自动附带期内考勤/积分/违纪/沟通统计。<br>· <b>科目顺序</b>：成绩录入/个人成绩/班级成员成绩 → “编辑科目”可拖动或 ◀▶ 调整，三处一致。<br>· <b>留痕</b>：工作日志、德育活动可拍照/上传截图，自动压缩。<br>· <b>值日/座位</b>：值日可“一键轮换”“自动刷新名单”；座位支持两人同桌、随机分配、自动适配人数。') +
     sec('五、常见问题', faqHtml) +
     sec('六、安全提示', '· 定期导出备份；不要把正式版链接公开转发（含你的云配置）。<br>· 工作台里不要写极端敏感信息（如身份证号）；云同步数据为明文存储。');
 }
 /* ================= 云同步（多设备实时同步） ================= */
-/* 驱动：LeanCloud 国际版（免备案、国内可直连）/ 自建 WebDAV（需开启 CORS）
+/* 驱动：LeanCloud 国际版（免备案、国内可直连）/ 腾讯云 CloudBase / 自建 WebDAV（需开启 CORS）
    策略：整库上传，版本号 rev 递增，新版本覆盖旧版本（最后保存者胜）；
    拉取覆盖前若本机还有未上传的修改，会自动在 localStorage 里备份一份，避免丢数据。 */
 
@@ -1166,6 +1166,15 @@ function hashStr(s) {
   for (let i = 0; i < s.length; i++) h = ((h * 33) ^ s.charCodeAt(i)) >>> 0;
   return h.toString(36);
 }
+function errMsg(e) {
+  if (!e) return '未知错误';
+  if (typeof e === 'string') return e;
+  if (typeof e.message === 'string' && e.message) return e.message;
+  if (typeof e.error === 'string' && e.error) return e.error;
+  if (typeof e.errMsg === 'string' && e.errMsg) return e.errMsg;
+  try { const s = JSON.stringify(e); if (s && s !== '{}' && s !== 'null') return s.slice(0, 200); } catch (e2) {}
+  return String(e);
+}
 function base64FromBytes(bytes) {
   let bin = '';
   const STEP = 0x8000;
@@ -1198,7 +1207,7 @@ const SyncEngine = {
 
   settings: function () {
     const st = DB.data.settings;
-    if (!st.sync) st.sync = { provider: '', appId: '', appKey: '', syncServer: '', supUrl: '', supKey: '', wdUrl: '', wdUser: '', wdPass: '', syncKey: 'main', pollSec: 10, rev: 0, updatedAt: '', lastSyncAt: '', lastError: '', deviceName: '' };
+    if (!st.sync) st.sync = { provider: '', appId: '', appKey: '', syncServer: '', supUrl: '', supKey: '', wdUrl: '', wdUser: '', wdPass: '', cbEnv: '', syncKey: 'main', pollSec: 10, rev: 0, updatedAt: '', lastSyncAt: '', lastError: '', deviceName: '' };
     return st.sync;
   },
   enabled: function () {
@@ -1206,6 +1215,7 @@ const SyncEngine = {
     if (s.provider === 'leancloud') return !!(s.appId && s.appKey);
     if (s.provider === 'supabase') return !!(s.supUrl && s.supKey);
     if (s.provider === 'webdav') return !!(s.wdUrl);
+    if (s.provider === 'cloudbase') return !!(s.cbEnv);
     return false;
   },
   applyDefaultIfNeeded: function () {
@@ -1274,6 +1284,7 @@ const SyncEngine = {
     if (this._driverCache && this._driverCache.type === s.provider) return this._driverCache;
     if (s.provider === 'leancloud') this._driverCache = makeLeanCloudDriver();
     else if (s.provider === 'supabase') this._driverCache = makeSupabaseDriver();
+    else if (s.provider === 'cloudbase') this._driverCache = makeCloudBaseDriver();
     else this._driverCache = makeWebDAVDriver();
     return this._driverCache;
   },
@@ -1351,9 +1362,9 @@ const SyncEngine = {
       this._setStatus('已同步 · ' + fmtSyncTime(s3.lastSyncAt), 'green');
     } catch (e) {
       const s2 = this.settings();
-      s2.lastError = e.message || String(e);
+      s2.lastError = errMsg(e);
       this._saveMeta();
-      this._setStatus('同步失败：' + (e.message || '网络错误'), 'red');
+      this._setStatus('同步失败：' + errMsg(e), 'red');
       console.warn('云同步失败', e);
     } finally {
       this._busy = false;
@@ -1422,6 +1433,7 @@ const SyncEngine = {
         s2.syncServer = oldSync.syncServer || '';
         s2.supUrl = oldSync.supUrl || '';
         s2.supKey = oldSync.supKey || '';
+        s2.cbEnv = oldSync.cbEnv || '';
         s2.rev = remote.rev || 0;
         s2.updatedAt = remote.updatedAt || '';
         s2.lastSyncAt = syncNowIso();
@@ -1436,10 +1448,10 @@ const SyncEngine = {
       return true;
     } catch (e) {
       const s2 = this.settings();
-      s2.lastError = e.message || String(e);
+      s2.lastError = errMsg(e);
       this._saveMeta();
-      this._setStatus('拉取失败：' + (e.message || '网络错误'), 'red');
-      if (!silent) toast('拉取失败：' + (e.message || '网络错误'), 'err');
+      this._setStatus('拉取失败：' + errMsg(e), 'red');
+      if (!silent) toast('拉取失败：' + errMsg(e), 'err');
       return false;
     } finally {
       this._busy = false;
@@ -1478,7 +1490,7 @@ const SyncEngine = {
       toast('云端已清空（尽力同步其他设备；保险起见请在每台设备上再确认一次）');
       return true;
     } catch (e) {
-      toast('同步清空其他设备失败：' + (e.message || e), 'err');
+      toast('同步清空其他设备失败：' + errMsg(e), 'err');
       return false;
     }
   },
@@ -1494,7 +1506,7 @@ const SyncEngine = {
       if (n === 0) toast('⚠️ 云端没有删除任何记录：可能已无数据，或 Supabase 表开启了 RLS/同步标识不匹配，请点“🔍 检测云端”确认', 'err');
       else toast('云端数据已清除（删除 ' + n + ' 条记录）');
     } catch (e) {
-      toast('清除云端数据失败：' + (e.message || e), 'err');
+      toast('清除云端数据失败：' + errMsg(e), 'err');
     }
   },
   cloudCheck: async function () {
@@ -1503,11 +1515,11 @@ const SyncEngine = {
       const meta = await this.driver().getMeta();
       if (!meta) { toast('✅ 云端无数据（当前同步标识下为空）'); return; }
       toast('云端有数据：同步标识 ' + meta.syncKey + ' · 版本 ' + meta.rev + ' · 更新于 ' + fmtSyncTime(meta.updatedAt));
-    } catch (e) { toast('检测云端失败：' + (e.message || e), 'err'); }
+    } catch (e) { toast('检测云端失败：' + errMsg(e), 'err'); }
   },
   disconnect: function () {
     const s = this.settings();
-    s.provider = ''; s.appId = ''; s.appKey = ''; s.wdUrl = ''; s.wdUser = ''; s.wdPass = '';
+    s.provider = ''; s.appId = ''; s.appKey = ''; s.wdUrl = ''; s.wdUser = ''; s.wdPass = ''; s.cbEnv = '';
     s.rev = 0; s.updatedAt = ''; s.lastSyncAt = ''; s.lastError = ''; s.syncKey = 'main';
     this._dirty = false;
     this._driverCache = null;
@@ -1519,9 +1531,11 @@ const SyncEngine = {
     const lc = document.querySelector('.sync-fields-lc');
     const sb = document.querySelector('.sync-fields-sb');
     const wd = document.querySelector('.sync-fields-wd');
+    const cb = document.querySelector('.sync-fields-cb');
     if (lc) lc.style.display = (v === 'leancloud') ? '' : 'none';
     if (sb) sb.style.display = (v === 'supabase') ? '' : 'none';
     if (wd) wd.style.display = (v === 'webdav') ? '' : 'none';
+    if (cb) cb.style.display = (v === 'cloudbase') ? '' : 'none';
   },
   statusHtml: function () {
     const s = this.settings();
@@ -1541,10 +1555,12 @@ const SyncEngine = {
     const isLC = s.provider === 'leancloud';
     const isSB = s.provider === 'supabase';
     const isWD = s.provider === 'webdav';
+    const isCB = s.provider === 'cloudbase';
     const providerOpts = [
       ['', '不使用云同步（仅本地）'],
       ['leancloud', 'LeanCloud 国际版（推荐，免备案）'],
       ['supabase', 'Supabase（PostgreSQL，免费额度大）'],
+      ['cloudbase', '腾讯云 CloudBase（云开发，国内速度快）'],
       ['webdav', '自建 WebDAV（需开启 CORS）']
     ].map(function (o) {
       return '<option value="' + o[0] + '"' + (s.provider === o[0] ? ' selected' : '') + '>' + o[1] + '</option>';
@@ -1558,12 +1574,15 @@ const SyncEngine = {
       field('syncSupUrl', 'Supabase 项目地址（Project URL）', s.supUrl, 'text', 'placeholder="https://xxxx.supabase.co"') +
       field('syncSupKey', 'anon 公钥（anon public）', s.supKey, 'password', 'placeholder="项目设置 → API → anon public"') +
       '</div>';
+    const cbFields = '<div class="sync-fields-cb"' + (isCB ? '' : ' style="display:none"') + '>' +
+      field('syncCbEnv', 'CloudBase 环境 ID（envId）', s.cbEnv, 'text', 'placeholder="云开发控制台 → 环境 → 环境ID，形如 xxxx-1a2b3c"') +
+      '</div>';
     const wdFields = '<div class="sync-fields-wd"' + (isWD ? '' : ' style="display:none"') + '>' +
       field('syncWdUrl', 'WebDAV 文件地址', s.wdUrl, 'text', 'placeholder="https://主机/dav/banzhuren-sync.json 或目录"') +
       field('syncWdUser', 'WebDAV 用户名', s.wdUser, 'text') +
       field('syncWdPass', 'WebDAV 密码', s.wdPass, 'password') +
       '</div>';
-    const body = lcFields + sbFields + wdFields + field('syncKey', '同步空间标识（同一账号多套数据可区分）', s.syncKey || 'main', 'text') +
+    const body = lcFields + sbFields + cbFields + wdFields + field('syncKey', '同步空间标识（同一账号多套数据可区分）', s.syncKey || 'main', 'text') +
     field('syncPoll', '自动拉取间隔（秒，越快越耗电/流量）', s.pollSec || 10, 'select', '', optionsHtml(['5', '10', '15', '30', '60'], String(s.pollSec || 10)));
     const builtIn = (window.DEFAULT_SYNC && window.DEFAULT_SYNC.supUrl && s.supUrl === String(window.DEFAULT_SYNC.supUrl).trim())
       ? '<div style="font-size:12.5px;color:var(--ok, #16a34a);margin-bottom:8px">📌 已内置 Supabase 配置：更换网址/新设备打开时会自动恢复，无需重新填写。</div>' : '';
@@ -1582,6 +1601,7 @@ const SyncEngine = {
       '<b>冲突规则：</b>多台设备同时编辑时以“最后保存的版本”为准；覆盖前会自动在浏览器里备份一份（banzhuren_sync_backup_*），不会丢数据。<br>' +
       (isLC ? '<b>LeanCloud 配置步骤：</b>① 打开 leancloud.app 注册国际版（免备案、国内可直连）→ 创建应用；② 进入 设置 → 应用凭证，复制 AppID 和 AppKey；③ 粘贴后点“保存并立即同步”，首次同步会自动创建两个数据表（WorkbenchSyncMeta / WorkbenchSyncChunk）。' : '') +
       (isSB ? '<b>Supabase 配置步骤：</b>① 注册 supabase.com 并创建项目；② 打开 SQL Editor，执行建表 + 授权 SQL（完整代码见 README-云同步与部署.md）；③ 项目设置 → API，复制 Project URL 和 anon public 粘贴到上方；④ 点“保存并立即同步”。' : '') +
+      (isCB ? '<b>腾讯云 CloudBase 配置步骤：</b>① 打开 cloud.tencent.com 的「云开发 CloudBase」创建环境，复制「环境ID（envId）」；② 环境 → 身份验证 → 登录方式，开启「匿名登录」；③ 环境 → 安全配置，把工作台网址加入「安全域名」（本地调试填 localhost）；④ 数据库创建两个集合并把权限设为「所有用户可读写」：workbench_sync_meta、workbench_sync_chunk；⑤ 粘贴环境ID后点“保存并立即同步”。' : '') +
       (isWD ? '<b>WebDAV 要求：</b>服务器（如 Cloudreve、Nextcloud）必须开启跨域 CORS，并支持 PUT/GET/DELETE；填入文件完整地址即可。' : '') +
       '</div></div>';
   }
@@ -1745,6 +1765,105 @@ function makeSupabaseDriver() {
     }
   };
 }
+
+
+/* ---------- 腾讯云 CloudBase 驱动（云开发 Web SDK + 匿名登录，需开启匿名登录并放行安全域名） ---------- */
+const CLOUDBASE_SDK_URLS = [
+  'https://static.cloudbase.net/cloudbase-js-sdk/latest/cloudbase.full.js',
+  'https://static.cloudbase.net/cloudbase-js-sdk/1.7.2/cloudbase.full.js'
+];
+let _cbSdkPromise = null;
+function loadCloudBaseSDK() {
+  if (typeof window.cloudbase !== 'undefined') return Promise.resolve(window.cloudbase);
+  if (_cbSdkPromise) return _cbSdkPromise;
+  _cbSdkPromise = new Promise(function (resolve, reject) {
+    let i = 0;
+    function tryNext() {
+      if (i >= CLOUDBASE_SDK_URLS.length) { _cbSdkPromise = null; reject(new Error('CloudBase SDK 加载失败（请检查网络 / 安全域名）')); return; }
+      const url = CLOUDBASE_SDK_URLS[i++];
+      const s = document.createElement('script');
+      s.src = url;
+      s.async = true;
+      s.onload = function () {
+        if (typeof window.cloudbase !== 'undefined') resolve(window.cloudbase);
+        else tryNext();
+      };
+      s.onerror = function () { tryNext(); };
+      document.head.appendChild(s);
+    }
+    tryNext();
+  });
+  return _cbSdkPromise;
+}
+
+function makeCloudBaseDriver() {
+  const s = SyncEngine.settings();
+  const envId = String(s.cbEnv || '').trim();
+  const key = function () { return String(s.syncKey || 'main').trim() || 'main'; };
+  let app = null;
+  let db = null;
+  async function ensure() {
+    const cloudbase = await loadCloudBaseSDK();
+    if (!app) {
+      app = cloudbase.init({ env: envId });
+      db = app.database();
+    }
+    const auth = app.auth({ persistence: 'local' });
+    try {
+      const hasState = (auth.hasLoginState && auth.hasLoginState());
+      if (!(hasState && hasState.user)) {
+        if (auth.signInAnonymously) await auth.signInAnonymously();
+        else await auth.anonymousAuthProvider().signIn();
+      }
+    } catch (e) {
+      throw new Error('CloudBase 匿名登录失败：' + errMsg(e) + '（请确认环境ID正确、已开启“匿名登录”，并把网址加入“安全域名”）');
+    }
+    return db;
+  }
+  const metaId = function () { return 'meta_' + hashStr(key()); };
+  return {
+    type: 'cloudbase',
+    getMeta: async function () {
+      const d = await ensure();
+      const res = await d.collection('workbench_sync_meta').doc(metaId()).get();
+      const rows = (res && res.data) || [];
+      if (!rows.length) return null;
+      const m = rows[0];
+      return { syncKey: m.syncKey, rev: m.rev || 0, updatedAt: m.updatedAt || '', deviceId: m.deviceId || '', checksum: m.checksum || '', size: m.size || 0, enc: m.enc || 'none' };
+    },
+    fetchPayload: async function () {
+      const d = await ensure();
+      const res = await d.collection('workbench_sync_chunk').where({ syncKey: key() }).limit(1000).get();
+      const rows = (res && res.data) || [];
+      if (!rows.length) throw new Error('云端没有数据块');
+      rows.sort(function (a, b) { return (a.idx || 0) - (b.idx || 0); });
+      let out = '';
+      rows.forEach(function (r) { out += r.payload || ''; });
+      return out;
+    },
+    push: async function (payload, meta) {
+      const d = await ensure();
+      const k = key();
+      /* 先删旧块，再传新块，最后写 meta（保证 meta.rev 永远指向完整数据） */
+      try { await d.collection('workbench_sync_chunk').where({ syncKey: k }).remove(); } catch (e) {}
+      const chunks = [];
+      for (let i = 0; i < payload.length; i += SYNC_CHUNK_SIZE) chunks.push(payload.slice(i, i + SYNC_CHUNK_SIZE));
+      for (let i = 0; i < chunks.length; i++) {
+        await d.collection('workbench_sync_chunk').doc('chunk_' + hashStr(k) + '_' + i).set({ syncKey: k, idx: i, total: chunks.length, payload: chunks[i], rev: meta.rev, deviceId: meta.deviceId });
+      }
+      await d.collection('workbench_sync_meta').doc(metaId()).set({ syncKey: k, rev: meta.rev, updatedAt: meta.updatedAt, deviceId: meta.deviceId, checksum: meta.checksum, size: meta.size, enc: meta.enc });
+    },
+    deleteRemote: async function () {
+      const d = await ensure();
+      const k = key();
+      let n = 0;
+      try { const r = await d.collection('workbench_sync_chunk').where({ syncKey: k }).remove(); n += (r && r.deleted) || 0; } catch (e) {}
+      try { const r = await d.collection('workbench_sync_meta').doc(metaId()).remove(); n += (r && r.deleted) || 0; } catch (e) {}
+      return n;
+    }
+  };
+}
+
 /* ================= 应用核心 ================= */
 const state = {
   module: 'dashboard',
@@ -2574,6 +2693,7 @@ const ACTIONS = {
     if (s.provider === 'leancloud') { s.appId = (v.syncAppId || '').trim(); s.appKey = v.syncAppKey || ''; s.syncServer = (v.syncServer || '').trim(); }
     if (s.provider === 'supabase') { s.supUrl = (v.syncSupUrl || '').trim(); s.supKey = v.syncSupKey || ''; }
     if (s.provider === 'webdav') { s.wdUrl = (v.syncWdUrl || '').trim(); s.wdUser = (v.syncWdUser || '').trim(); s.wdPass = v.syncWdPass || ''; }
+    if (s.provider === 'cloudbase') { s.cbEnv = (v.syncCbEnv || '').trim(); }
     if (v.syncPoll) { s.pollSec = parseInt(v.syncPoll, 10) || 10; }
     if (v.syncKey) s.syncKey = String(v.syncKey).trim() || 'main';
     s.deviceName = (DB.data.settings.teacherName || '我的') + '的设备';
