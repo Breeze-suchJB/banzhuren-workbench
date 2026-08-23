@@ -1,5 +1,5 @@
 /* 构建版本 */
-const APP_VERSION = '20260823-182100';
+const APP_VERSION = '20260823-195732';
 /* ================= 数据层 ================= */
 const STORAGE_KEY = 'banzhuren_workbench_v1';
 const NO_DEMO_KEY = 'banzhuren_no_demo';
@@ -2801,11 +2801,27 @@ function exportFundsCsv(rStart, rEnd) {
   const S = rStart && rEnd ? (rStart <= rEnd ? rStart : rEnd) : '';
   const E = rStart && rEnd ? (rStart <= rEnd ? rEnd : rStart) : '';
   const inR = function (dt) { return !!dt && (!S || (dt >= S && dt <= E)); };
+  const all = (d.funds || []).slice();
+  const inScope = S ? all.filter(function (f) { return inR(f.date); }) : all;
+  const sum = function (arr, type) { return arr.reduce(function (a, f) { return a + (f.type === type ? (parseFloat(f.amount) || 0) : 0); }, 0); };
+  const income = sum(all, '收入'), expense = sum(all, '支出'), balance = income - expense;
+  const sIncome = sum(inScope, '收入'), sExpense = sum(inScope, '支出'), sBalance = sIncome - sExpense;
   const head = ['日期', '类型', '分类', '金额', '说明'];
   if (S) head.push('时间段');
-  const rows = [head];
-  (d.funds || []).slice().sort((a, b) => a.date < b.date ? -1 : 1).forEach(f => {
-    if (S && !inR(f.date)) return;
+  const rows = [];
+  /* 汇总区：总收入 / 总支出 / 当前剩余班费 */
+  rows.push(['班费收支汇总']);
+  rows.push(['总收入', income.toFixed(2)]);
+  rows.push(['总支出', expense.toFixed(2)]);
+  rows.push(['剩余班费（结余）', balance.toFixed(2)]);
+  if (S) {
+    rows.push(['所选时间段 ' + S + ' ~ ' + E + ' 内总收入', sIncome.toFixed(2)]);
+    rows.push(['所选时间段内总支出', sExpense.toFixed(2)]);
+    rows.push(['所选时间段内结余', sBalance.toFixed(2)]);
+  }
+  rows.push([]);
+  rows.push(head);
+  inScope.slice().sort(function (a, b) { return a.date < b.date ? -1 : 1; }).forEach(function (f) {
     const row = [f.date, f.type, f.category || '', f.amount, f.note || ''];
     if (S) row.push(S + ' ~ ' + E);
     rows.push(row);
