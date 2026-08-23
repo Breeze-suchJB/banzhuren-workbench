@@ -1114,7 +1114,7 @@ function renderHelp() {
     sec('二、数据与多设备同步', '· 数据存在每台设备的浏览器本地；云端 = Supabase / 腾讯云 CloudBase 等（在 数据管理→云同步 选择）。<br>· 腾讯云 CloudBase 需「文档型数据库」环境（控制台里有“新建集合”）；若环境只有 SQL/PostgreSQL（只能新建表），请改用 Supabase 或 LeanCloud。<br>· 新设备打开会自动内置配置并拉取；也可在 数据管理→云同步 手动填写对应凭据（如 Supabase 项目地址 + anon 公钥）→“保存并立即同步”。<br>· 本机修改约 2 秒自动上传；自动拉取间隔可调（5/10/15/30/60 秒，默认 10 秒）。<br>· 其他设备需在线 + 最新版，刷新/重开一次即可拿到最新。') +
     sec('三、各功能板块', '<div class="help-grid">' + modHtml + '</div>') +
     sec('四、常用操作', '· <b>备份</b>：数据管理 → 导出 JSON 完整备份（重要操作前先备份）。<br>· <b>导入学生</b>：学生管理 → 导入 CSV（表头含：学号,姓名,性别,住校,职务,家庭情况,家长1姓名,家长1关系,家长1手机号,家长2姓名,家长2关系,家长2手机号,监护人,入学日期,小组编号,预警标签,标签）。<br>· <b>导入成绩</b>：成绩录入 → 打开考试 → “📄 空白模板”→ 填好 → “📥 导入 CSV” → 保存成绩。<br>· <b>按时间段导出</b>：导出学生 CSV 时可选起止日期，自动附带期内考勤/积分/违纪/沟通统计。<br>· <b>科目顺序</b>：成绩录入/个人成绩/班级成员成绩 → “编辑科目”可拖动或 ◀▶ 调整，三处一致。<br>· <b>留痕</b>：工作日志、德育活动可拍照/上传截图，自动压缩。<br>· <b>值日/座位</b>：值日可“一键轮换”“自动刷新名单”；座位支持两人同桌、随机分配、自动适配人数。') +
-    sec('五、绑定腾讯云 CloudBase 同步（详细步骤）', '<b>适合：</b>想把数据同步到腾讯云的用户（同事版用户用<b>自己的</b>腾讯云账号，数据与别人隔离）。<br><b>准备工作：</b>腾讯云账号（cloud.tencent.com，需实名认证）。<br><b>① 创建环境：</b>打开「云开发 CloudBase」（tcb.cloud.tencent.com）→ 新建环境 → 填环境名称 → 创建。<br>· 资源勾选「<b>云数据库</b>」——<b>「云数据库」就是文档型数据库（MongoDB）</b>，控制台里就叫“云数据库”，不叫“文档型数据库”；<b>千万不要选 PostgreSQL / PG 模式</b>（选了就只有“新建表”、没有“新建集合”，工作台用不了）。<br>· 创建完成后在「环境概览」复制「环境ID（envId）」（形如 xxx-1a2b3c）。<br><b>② 开启匿名登录：</b>环境 → 「登录授权 / 身份验证」→ 登录方式 → 开启「<b>匿名登录</b>」。不开启会同步失败，工作台会提示“匿名登录未开启”。<br><b>③ 新建两个集合：</b>环境 → 数据库 → 「集合管理」→「+ 新建集合」，分别建：<br>· workbench_sync_meta（存版本号 / 校验信息）<br>· workbench_sync_chunk（存数据分块）<br>· 两个集合权限都设为「<b>所有用户可读写</b>」（多设备互通必须）。<br><b>④ 安全域名（可选）：</b>环境 →「环境配置 / 设置」→「安全来源 / 安全配置」→「安全域名」→「添加域名」→ 填工作台网址（如 https://你的网址，本地调试填 localhost）。实测大多数情况不添加也能同步；只有出现 CORS / 跨域被拦截报错时才必须添加。<br><b>⑤ 在工作台绑定：</b>数据管理 → 云同步 → 同步方式选「<b>腾讯云 CloudBase</b>」→ 粘贴环境ID（正式版已内置会自动带出）→ 点「<b>保存并立即同步</b>」。<br><b>⑥ 多设备：</b>每台设备填同一个环境ID即可互通；同事版用户请填<b>他自己的</b>环境ID，数据互相隔离。') +
+    sec('五、绑定腾讯云 CloudBase 同步（详细步骤）', '<b>适合：</b>想把数据同步到腾讯云的用户（同事版用户用<b>自己的</b>腾讯云账号，数据与别人隔离）。<br><b>准备工作：</b>腾讯云账号（cloud.tencent.com，需实名认证）。<br><b>① 创建环境：</b>打开「云开发 CloudBase」（tcb.cloud.tencent.com）→ 新建环境 → 填环境名称 → 创建。<br>· 资源勾选「<b>云数据库</b>」——<b>「云数据库」就是文档型数据库（MongoDB）</b>，控制台里就叫“云数据库”，不叫“文档型数据库”；<b>千万不要选 PostgreSQL / PG 模式</b>（选了就只有“新建表”、没有“新建集合”，工作台用不了）。<br>· 创建完成后在「环境概览」复制「环境ID（envId）」（形如 xxx-1a2b3c）。<br><b>② 开启匿名登录：</b>环境 → 「登录授权 / 身份验证」→ 登录方式 → 开启「<b>匿名登录</b>」。不开启会同步失败，工作台会提示“匿名登录未开启”。<br><b>③ 新建两个集合：</b>环境 → 数据库 → 「集合管理」→「+ 新建集合」，分别建：<br>· workbench_sync_meta（存版本号 / 校验信息）<br>· workbench_sync_chunk（存数据分块）<br>· 两个集合权限都设为「<b>所有用户可读写</b>」（多设备互通必须）。<br><b>④ 安全域名（必须，否则跨域被拦截）：</b>环境 →「环境配置 / 设置」→「安全来源 / 安全配置」→「安全域名」→「添加域名」→ 填工作台网址（就是你打开工作台时地址栏里的网址，如 https://你的域名，本地调试填 localhost 或 http://127.0.0.1）。不加会被浏览器 CORS 拦截，同步失败。<br><b>⑤ 在工作台绑定：</b>数据管理 → 云同步 → 同步方式选「<b>腾讯云 CloudBase</b>」→ 粘贴环境ID（正式版已内置会自动带出）→ 点「<b>保存并立即同步</b>」。<br><b>⑥ 多设备：</b>每台设备填同一个环境ID即可互通；同事版用户请填<b>他自己的</b>环境ID，数据互相隔离。') +
     sec('六、常见问题', faqHtml) +
     sec('七、安全提示', '· 定期导出备份；不要把正式版链接公开转发（含你的云配置）。<br>· 工作台里不要写极端敏感信息（如身份证号）；云同步数据为明文存储。');
 }
@@ -1823,29 +1823,39 @@ function makeCloudBaseDriver() {
       db = app.database();
     }
     const auth = app.auth({ persistence: 'local' });
+    const hasUser = function () { const st = (auth.hasLoginState && auth.hasLoginState()); return !!(st && st.user); };
+    if (hasUser()) return db;
+    let loginErr = null;
     try {
-      const hasState = (auth.hasLoginState && auth.hasLoginState());
-      if (!(hasState && hasState.user)) {
-        if (auth.signInAnonymously) await auth.signInAnonymously();
-        else await auth.anonymousAuthProvider().signIn();
-        /* 部分 SDK 版本在“匿名登录未开启”时不会抛错而是静默失败，这里主动校验登录态 */
-        const after = (auth.hasLoginState && auth.hasLoginState());
-        if (!(after && after.user)) {
-          throw new Error('匿名登录未开启');
-        }
-      }
-    } catch (e) {
-      const em = errMsg(e);
-      if (em.indexOf('unauthenticated') >= 0 || em.indexOf('credentials not found') >= 0 || em.indexOf('匿名登录未开启') >= 0) {
+      if (auth.signInAnonymously) await auth.signInAnonymously();
+      else await auth.anonymousAuthProvider().signIn();
+    } catch (e) { loginErr = e; }
+    if (loginErr) {
+      const em = errMsg(loginErr);
+      const low = em.toLowerCase();
+      if (low.indexOf('unauthenticated') >= 0 || low.indexOf('credentials not found') >= 0 || low.indexOf('login_type_disabled') >= 0 || em.indexOf('登录方式未开启') >= 0 || em.indexOf('匿名登录未开启') >= 0) {
         throw new Error('CloudBase 匿名登录未开启：请在云开发控制台「登录授权」中开启「匿名登录」（当前环境 ' + envId + '）。直达：https://tcb.cloud.tencent.com/dev?envId=' + envId + '#/identity/login-manage');
       }
-      throw new Error('CloudBase 匿名登录失败：' + em + '（请确认环境ID正确、已开启“匿名登录”，并把网址加入“安全域名”）');
+      if (low.indexOf('failed to fetch') >= 0 || low.indexOf('networkerror') >= 0 || low.indexOf('load failed') >= 0 || low.indexOf('cors') >= 0 || low.indexOf('network') >= 0) {
+        throw new Error('CloudBase 请求被浏览器拦截或网络不通（CORS/跨域）：请在云开发控制台把工作台网址加入「安全域名」（环境 → 环境配置/设置 → 安全来源/安全配置 → 安全域名 → 添加域名：' + location.origin + '），并确认网络正常。');
+      }
+      throw new Error('CloudBase 登录失败：' + em + '（请确认环境ID正确、已开启“匿名登录”、网址已加入“安全域名”）');
+    }
+    /* 登录成功但本地登录态未就绪时稍等；若仍未就绪，多半是 CORS 拦截或匿名登录未开启 */
+    for (let i = 0; i < 5 && !hasUser(); i++) {
+      await new Promise(function (res) { setTimeout(res, 200); });
+    }
+    if (!hasUser()) {
+      throw new Error('CloudBase 登录未生效：请确认①已开启「匿名登录」；②已把工作台网址加入「安全域名」（环境 → 环境配置/设置 → 安全来源/安全配置 → 安全域名 → 添加域名：' + location.origin + '）。这是最常见的原因。');
     }
     return db;
   }
   const metaId = function () { return 'meta_' + hashStr(key()); };
   function cbErr(action, e) {
     const em = errMsg(e);
+    if (/unauthenticated|credentials not found|login_type_disabled|登录方式未开启|匿名登录未开启/i.test(em)) {
+      return new Error('CloudBase 登录未生效（' + em + '）：请确认已开启「匿名登录」，并把工作台网址加入「安全域名」（环境 → 环境配置/设置 → 安全来源/安全配置 → 安全域名 → 添加域名：' + location.origin + '）。');
+    }
     if (/no document database|document database instance|ExecutePGSql|postgres/i.test(em)) {
       return new Error('你的 CloudBase 环境是 PostgreSQL（SQL）类型，没有「文档型数据库」：本工作台的 CloudBase 同步需要文档型数据库（集合）。请在控制台新建一个包含「文档型数据库」的环境（不要选 PG 模式/只选 PostgreSQL），或改用 Supabase / LeanCloud 同步。');
     }
