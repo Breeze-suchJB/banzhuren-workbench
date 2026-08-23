@@ -1613,6 +1613,7 @@ const SyncEngine = {
       '<button class="btn primary" data-action="saveSync">保存并立即同步</button>' +
       '<button class="btn primary" data-action="pushNow">📤 立即上传到云端</button>' +
       '<button class="btn outline" data-action="syncPull">立即拉取</button>' +
+      '<button class="btn outline" data-action="cbDiag">🔍 CloudBase 网络诊断</button>' +
       '<button class="btn outline" data-action="cloudCheck">🔍 检测云端</button>' +
       (s.provider === 'cloudbase' && window.DEFAULT_SYNC && window.DEFAULT_SYNC.cbEnv ? '<button class="btn outline" data-action="cbUseBuiltin">改用内置环境ID</button>' : '') +
       '<button class="btn danger" data-action="syncDisconnect">断开云同步</button>' +
@@ -1627,6 +1628,37 @@ const SyncEngine = {
   }
 };
 function syncCardHtml() { return SyncEngine.cardHtml(); }
+
+/* ---------- CloudBase 网络诊断：区分 跨域拦截 / 网络不通 / 接口正常 ---------- */
+function cloudbaseDiag() {
+  const s = SyncEngine.settings();
+  const envId = String(s.cbEnv || '').trim();
+  const region = String(s.cbRegion || '').trim() || 'ap-shanghai';
+  const api = 'https://' + envId + '.' + region + '.tcb-api.tencentcloudapi.com';
+  const lines = [];
+  lines.push('🕐 诊断时间：' + fmtSyncTime(syncNowIso()));
+  lines.push('🌐 当前网址：' + location.origin + '（' + location.protocol + '）');
+  lines.push('📶 浏览器在线：' + (navigator.onLine ? '是' : '否'));
+  lines.push('☁️ CloudBase 接口：' + api);
+  lines.push('--------------------------------');
+  async function probe(name, url, opts) {
+    const t0 = Date.now();
+    try {
+      const r = await fetchTimeout(url, opts, 12000);
+      return '✅ ' + name + '：可访问（HTTP ' + r.status + '，' + (Date.now() - t0) + 'ms）';
+    } catch (e) {
+      return '❌ ' + name + '：失败（' + errMsg(e) + '，' + (Date.now() - t0) + 'ms）';
+    }
+  }
+  (async function () {
+    lines.push(await probe('① CloudBase 登录接口（模拟浏览器跨域请求）', api + '/auth/v1/signin/anonymously', { method: 'OPTIONS', headers: { 'Origin': location.origin, 'Access-Control-Request-Method': 'POST', 'Access-Control-Request-Headers': 'content-type,x-device-id,x-sdk-version,x-seqid' } }));
+    lines.push(await probe('② CloudBase 网络连通性（no-cors，不受跨域限制）', api + '/', { method: 'HEAD', mode: 'no-cors' }));
+    lines.push(await probe('③ SDK 加载源 static.cloudbase.net', 'https://static.cloudbase.net/cloudbase-js-sdk/latest/cloudbase.full.js', { method: 'GET', mode: 'no-cors' }));
+    lines.push('--------------------------------');
+    lines.push('怎么看结果：①失败而②成功 = 跨域(CORS)被拦截；①②都失败 = 这台设备/网络连不上腾讯云接口；①②③都成功 = 接口网络正常，问题在别处。');
+    openModal('<div style="font-size:13px;line-height:2.1;white-space:pre-wrap">' + esc(lines.join('\n')) + '</div>', { title: '🔍 CloudBase 网络诊断' });
+  })();
+}
 
 /* ---------- LeanCloud 国际版驱动 ---------- */
 function makeLeanCloudDriver() {
@@ -2795,6 +2827,7 @@ const ACTIONS = {
     toast('已改用内置环境ID：' + s.cbEnv + '，请点“保存并立即同步”');
   },
   syncPull: function () { if (DB.data.settings) DB.data.settings.cleanSlate = false; SyncEngine.pull(false); },
+  cbDiag: function () { cloudbaseDiag(); },
   syncDisconnect: function () {
     confirmBox({ title: '断开云同步', message: '断开后本机不再上传/下载云端数据，本地数据会完整保留；云端数据也保留，之后可随时重新连接。确定断开吗？', danger: true, okText: '断开', onOk: function () { SyncEngine.disconnect(); } });
   },
