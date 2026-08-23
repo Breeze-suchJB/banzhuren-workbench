@@ -1968,24 +1968,42 @@ function makeCloudBaseDriver() {
     },
     push: async function (payload, meta) {
       const k = key();
-      /* 1. 先写新数据块：_id = 同步标识+版本+序号，唯一，绝不会撞键 */
+      function isDup(er) { const m = String((er && er.message) || er || ''); return m.indexOf('E11000') >= 0 || m.indexOf('duplicate key') >= 0 || m.indexOf('bulk write') >= 0 || m.indexOf('multiple write') >= 0; }
+      /* 0. 先尽力清掉本同步标识的旧数据块（清不掉也没关系，下面有兜底） */
+      try { await db('/collections/workbench_sync_chunk/documents/remove', { method: 'POST', body: JSON.stringify({ query: { syncKey: k }, multi: true }) }); } catch (e0) {}
+      /* 1. 写新数据块：_id = 同步标识+版本+序号 */
       const chunks = [];
       for (let i = 0; i < payload.length; i += SYNC_CHUNK_SIZE) chunks.push(payload.slice(i, i + SYNC_CHUNK_SIZE));
       if (!chunks.length) chunks.push('');
       const docs = chunks.map(function (c, i) {
         return { _id: 'chunk_' + hashStr(k) + '_' + meta.rev + '_' + i, syncKey: k, rev: meta.rev, idx: i, total: chunks.length, payload: c, deviceId: meta.deviceId };
       });
-      await db('/collections/workbench_sync_chunk/documents', { method: 'POST', body: JSON.stringify({ data: docs }) });
-      /* 2. 再 upsert 版本记录（固定 _id，先匹配后创建，避免重复键） */
-      await db('/collections/workbench_sync_meta/documents', {
-        method: 'PATCH',
-        body: JSON.stringify({
-          query: { _id: metaId() },
-          data: { syncKey: k, rev: meta.rev, updatedAt: meta.updatedAt, deviceId: meta.deviceId, checksum: meta.checksum, size: meta.size, enc: meta.enc },
-          upsert: true,
-          multi: false
-        })
-      });
+      try {
+        await db('/collections/workbench_sync_chunk/documents', { method: 'POST', body: JSON.stringify({ data: docs }) });
+      } catch (e1) {
+        if (!isDup(e1)) throw e1;
+        /* 部分块已存在（上次同版本上传到一半）：逐个补插，已存在的跳过 */
+        for (let i = 0; i < docs.length; i++) {
+          try { await db('/collections/workbench_sync_chunk/documents', { method: 'POST', body: JSON.stringify({ data: [docs[i]] }) }); }
+          catch (e2) { if (!isDup(e2)) throw e2; }
+        }
+      }
+      /* 2. 版本记录：先尝试 upsert；若因权限/已存在失败，删除后重建 */
+      try {
+        await db('/collections/workbench_sync_meta/documents', {
+          method: 'PATCH',
+          body: JSON.stringify({
+            query: { _id: metaId() },
+            data: { syncKey: k, rev: meta.rev, updatedAt: meta.updatedAt, deviceId: meta.deviceId, checksum: meta.checksum, size: meta.size, enc: meta.enc },
+            upsert: true,
+            multi: false
+          })
+        });
+      } catch (em) {
+        if (!isDup(em)) throw em;
+        try { await db('/collections/workbench_sync_meta/documents/remove', { method: 'POST', body: JSON.stringify({ query: { _id: metaId() }, multi: true }) }); } catch (e2) {}
+        await db('/collections/workbench_sync_meta/documents', { method: 'POST', body: JSON.stringify({ data: [{ _id: metaId(), syncKey: k, rev: meta.rev, updatedAt: meta.updatedAt, deviceId: meta.deviceId, checksum: meta.checksum, size: meta.size, enc: meta.enc }] }) });
+      }
       /* 3. 清理旧版本残留数据块（失败不影响本次上传） */
       try {
         await db('/collections/workbench_sync_chunk/documents/remove', {
