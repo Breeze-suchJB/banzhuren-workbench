@@ -1101,10 +1101,10 @@ function renderHelp() {
     ['为什么手机删学生电脑能同步，但“一键清空”不能？', '普通修改（如删学生）是增量同步：云端版本+1，其他设备拉取新版本即可，很稳定。“一键清空”是“推翻一切”的特殊操作，要求其他设备在线、是最新版、云端允许写入清空标记、且本地没有未上传改动，任一不满足就不同步。所以清空请在每一台设备上各执行一次。'],
     ...(isDemo ? [] : [['换电脑 / 新设备怎么用？', '直接用浏览器打开正式版链接：https://breeze-suchJB.github.io/banzhuren-workbench/ 。首次打开会自动内置 Supabase 配置并拉取云端数据，请先等它拉取完成再录入，避免覆盖云端。']]),
     ['演示数据会传到云端吗？', '不会自动上传：重新生成演示数据后进入“演示模式”，本地改动不会自动上传，避免覆盖真实数据。确认要上传时，点“📤 立即上传到云端”。'],
-    ['怎么绑定腾讯云 CloudBase 同步？', '详细步骤见上方「六、绑定腾讯云 CloudBase 同步（详细步骤）」。要点：环境要含「云数据库」（就是文档型数据库，有“新建集合”）；开启「匿名登录」；建 workbench_sync_meta、workbench_sync_chunk 两个集合并设为「所有用户可读写」；然后云同步选「腾讯云 CloudBase」填环境ID即可。'],
+    ['怎么绑定 LeanCloud 同步？', '详细步骤见上方「六、绑定 LeanCloud 同步（国内版 / 国际版）」。要点：leancloud.cn（国内版，需实名）或 leancloud.app（国际版）注册创建应用 → 设置 → 应用凭证复制 AppID 和 AppKey → 云同步选「LeanCloud」，版本选国内版/国际版，粘贴即可。首次同步自动建表，无需手动建表。'],
     ['怎么绑定 Supabase 同步？', '详细步骤见上方「五、绑定 Supabase 同步（详细步骤）」。要点：supabase.com 注册建项目 → SQL Editor 执行建表 SQL（见该章节）→ Project Settings → API 复制 Project URL + anon 公钥 → 云同步选「Supabase」粘贴即可（正式版已内置，自动带出）。'],
-    ['云同步失败怎么办？', '检查网络；确认配置无误（Supabase：地址 + anon 公钥；CloudBase：环境ID + 地域一致 + 开启匿名登录 + 环境必须是文档型数据库（PG/SQL 模式不可用）——且工作台必须部署在 CloudBase 静态托管用默认网址打开，GitHub Pages 等网址会被数据库网关 403 拒绝，需改用 Supabase；LeanCloud：AppID/AppKey）。数据库需允许读写（Supabase 关 RLS 或授权；CloudBase 权限设为“所有用户可读写”）。可在云同步卡片点“🔍 检测云端”看云端到底有没有数据。'],
-    ['清空后数据又回来了？', '本地刷新不会回来（清净状态）。若你“立即拉取”又拉回旧数据，说明云端没删干净：Supabase 在 SQL Editor 执行 delete from workbench_sync;（CloudBase 删除 workbench_sync_meta / workbench_sync_chunk 两个集合的数据），或检查表权限。'],
+    ['云同步失败怎么办？', '检查网络；确认配置无误（Supabase：地址 + anon 公钥；LeanCloud：AppID + AppKey，国内版选 leancloud.cn 需实名认证）。可在云同步卡片点“🔍 检测云端”看云端到底有没有数据。'],
+    ['清空后数据又回来了？', '本地刷新不会回来（清净状态）。若你“立即拉取”又拉回旧数据，说明云端没删干净：Supabase 在 SQL Editor 执行 delete from workbench_sync;（LeanCloud 到控制台删除 WorkbenchSyncMeta / WorkbenchSyncChunk 两个表的数据），或检查表权限。'],
     ['怎样彻底隔离旧数据，防止弄混？', '把“同步空间标识”换成一个新名字（例如 real2026），旧数据在旧标识下，永远混不进来；所有设备用同一个新标识即可互通。'],
     ['成绩 CSV 导不进去？', '用“空白模板”，不要改表头；Excel 另存的 CSV（GBK 编码）我们已自动兼容；学号前导零（001→1）也能匹配；导入后点“保存成绩”生效。'],
     ['同步/拉取很慢？', '可在云同步里调“自动拉取间隔”（5~60 秒，默认 10 秒）；留痕照片会自动压缩，避免拖慢同步。']
@@ -1112,16 +1112,16 @@ function renderHelp() {
   const faqHtml = faq.map(q => '<div class="help-faq"><div class="hf-q">❓ ' + q[0] + '</div><div class="hf-a">' + q[1] + '</div></div>').join('');
   return '<div class="page-title">📖 使用帮助</div><div class="page-sub">工作台使用手册 · 当前版本 v' + ver + '</div>' +
     sec('一、这是什么、怎么打开', '这是一个<b>网页应用</b>：电脑/手机/平板用浏览器打开即可使用，也可“添加到主屏幕”像 App 一样用。<br>数据 = 每台设备浏览器本地 + 云端同步（多设备互通）。' + (isDemo ? '' : '<br><b>正式版：</b>https://breeze-suchJB.github.io/banzhuren-workbench/ ｜ <b>给同事的演示版：</b>https://breeze-suchJB.github.io/banzhuren-workbench-clean/（不含你的数据）')) +
-    sec('二、数据与多设备同步', '· 数据存在每台设备的浏览器本地；云端 = Supabase / 腾讯云 CloudBase 等（在 数据管理→云同步 选择）。<br>· 腾讯云 CloudBase 需「文档型数据库」环境（控制台里有“新建集合”）；若环境只有 SQL/PostgreSQL（只能新建表），请改用 Supabase 或 LeanCloud。<br>· 新设备打开会自动内置配置并拉取；也可在 数据管理→云同步 手动填写对应凭据（如 Supabase 项目地址 + anon 公钥）→“保存并立即同步”。<br>· 本机修改约 2 秒自动上传；自动拉取间隔可调（5/10/15/30/60 秒，默认 10 秒）。<br>· 其他设备需在线 + 最新版，刷新/重开一次即可拿到最新。') +
+    sec('二、数据与多设备同步', '· 数据存在每台设备的浏览器本地；云端 = Supabase / LeanCloud（国内版 / 国际版）等（在 数据管理→云同步 选择）。<br>· LeanCloud 国内版（leancloud.cn）需实名认证、国内访问快；国际版（leancloud.app）免备案。<br>· 新设备打开会自动内置配置并拉取；也可在 数据管理→云同步 手动填写对应凭据（如 Supabase 项目地址 + anon 公钥）→“保存并立即同步”。<br>· 本机修改约 2 秒自动上传；自动拉取间隔可调（5/10/15/30/60 秒，默认 10 秒）。<br>· 其他设备需在线 + 最新版，刷新/重开一次即可拿到最新。') +
     sec('三、各功能板块', '<div class="help-grid">' + modHtml + '</div>') +
     sec('四、常用操作', '· <b>备份</b>：数据管理 → 导出 JSON 完整备份（重要操作前先备份）。<br>· <b>导入学生</b>：学生管理 → 导入 CSV（表头含：学号,姓名,性别,住校,职务,家庭情况,家长1姓名,家长1关系,家长1手机号,家长2姓名,家长2关系,家长2手机号,监护人,入学日期,小组编号,预警标签,标签）。<br>· <b>导入成绩</b>：成绩录入 → 打开考试 → “📄 空白模板”→ 填好 → “📥 导入 CSV” → 保存成绩。<br>· <b>按时间段导出</b>：导出学生 CSV 时可选起止日期，自动附带期内考勤/积分/违纪/沟通统计。<br>· <b>科目顺序</b>：成绩录入/个人成绩/班级成员成绩 → “编辑科目”可拖动或 ◀▶ 调整，三处一致。<br>· <b>留痕</b>：工作日志、德育活动可拍照/上传截图，自动压缩。<br>· <b>值日/座位</b>：值日可“一键轮换”“自动刷新名单”；座位支持两人同桌、随机分配、自动适配人数。') +
     sec('五、绑定 Supabase 同步（详细步骤）', '<b>适合：</b>想用 Supabase（PostgreSQL 云数据库）做云同步的用户。正式版已内置你的 Supabase 配置，新设备打开会自动带出；同事版请用<b>他自己的</b> Supabase 项目，数据互相隔离。<br><b>准备工作：</b>一个邮箱。<br><b>① 注册并创建项目：</b>打开 supabase.com → 注册（邮箱即可）→ Create a new project → 填项目名、设置数据库密码、选地区（建议选 Singapore / 东南亚，国内访问较快）→ 创建（免费额度 500MB 数据库，个人够用）。<br><b>② 建表并授权：</b>左侧 SQL Editor → New query → 粘贴以下 SQL → Run：<br><code>create table if not exists public.workbench_sync (sync_key text primary key, rev bigint not null default 0, updated_at timestamptz not null default now(), device_id text, checksum text, size bigint, enc text, payload text);</code><br><code>alter table public.workbench_sync enable row level security;</code><br><code>create policy "sync_select" on public.workbench_sync for select using (true);</code><br><code>create policy "sync_insert" on public.workbench_sync for insert with check (true);</code><br><code>create policy "sync_update" on public.workbench_sync for update using (true) with check (true);</code><br>· 个人用更简单：把上面 3 条策略换成一行 <code>alter table public.workbench_sync disable row level security;</code> 即可（关闭行级安全）。<br><b>③ 拿密钥：</b>左侧 Project Settings → API → 复制 <b>Project URL</b>（形如 https://xxxx.supabase.co）和 <b>anon public</b> 公钥。<br><b>④ 在工作台绑定：</b>数据管理 → 云同步 → 同步方式选「<b>Supabase</b>」→ 粘贴 Project URL 和 anon 公钥（正式版已内置会自动带出）→ 点「<b>保存并立即同步</b>」。<br><b>⑤ 多设备：</b>每台设备填相同的 Project URL + anon 公钥即可互通；同事版用户请填他自己的 Supabase 项目。') +
-    sec('六、绑定腾讯云 CloudBase 同步（详细步骤）', '<b>⚠️ 重要前提：</b>CloudBase 同步<b>只适用于部署在 CloudBase「静态网站托管」并用默认网址 https://你的环境ID.tcloudbaseapp.com 打开</b>的工作台。用 GitHub Pages 等其它网址打开时，CloudBase 数据库网关会直接 403 拒绝，无法同步——这种情况请改用内置的 Supabase 同步（同步方式选 Supabase 保存即可）。<br><b>适合：</b>想把数据同步到腾讯云的用户（同事版用户用<b>自己的</b>腾讯云账号，数据与别人隔离）。<br><b>⚠️ 最重要：环境必须是「传统模式（文档型数据库）」。</b>创建环境时<b>千万不要选 PostgreSQL / PG 模式</b>——选了就只有“新建表”、没有“新建集合”，同步永远无法使用，且<b>创建后不可切换</b>，只能重新新建环境；如果你现在的环境已经是 PG 模式（控制台只有“新建表”），请按①重新新建，或直接用内置的 Supabase 同步。<br><b>准备工作：</b>腾讯云账号（cloud.tencent.com，需实名认证）。<br><b>① 创建环境：</b>打开「云开发 CloudBase」（tcb.cloud.tencent.com）→ 新建环境 → 填环境名称 → 创建。<br>· 地域请选<b>中国大陆</b>（广州/上海等）；个别地域（如新加坡）只提供 PostgreSQL，也只有“新建表”。<br>· 资源勾选「<b>云数据库</b>」——「云数据库」就是文档型数据库（MongoDB），控制台里就叫“云数据库”，不叫“文档型数据库”；<b>不要选 PostgreSQL / PG 模式</b>。<br>· 创建完成后在「环境概览」复制「环境ID（envId）」（形如 xxx-1a2b3c），并看一下「地域」（如上海/广州/北京），第⑤步要选一致。<br><b>② 开启匿名登录：</b>环境 →「登录授权 / 身份验证」→ 登录方式 → 开启「<b>匿名登录</b>」。不开启会同步失败，工作台会提示“匿名登录未开启”。<br><b>③ 新建两个集合：</b>环境 → 数据库 → 「集合管理」→「+ 新建集合」，分别建：<br>· workbench_sync_meta（存版本号 / 校验信息）<br>· workbench_sync_chunk（存数据分块）<br>· 两个集合权限都设为「<b>所有用户可读写</b>」（多设备互通必须）。<br><b>④ 安全域名：</b>环境 →「环境配置 / 设置」→「安全来源 / 安全配置」→「安全域名」→「添加域名」→ 填工作台网址（本地调试填 localhost 或 http://127.0.0.1）。不加会被浏览器 CORS 拦截，同步失败。<br>· <b>免费版没有「安全来源/安全域名」入口？</b>这是免费版限制（免费版不提供“添加安全域名”）。解决办法：把工作台也部署到 CloudBase「静态网站托管」，用默认网址 <b>https://你的环境ID.tcloudbaseapp.com</b> 打开——该域名官方已自动加入安全域名白名单，无需手动配置，CloudBase 同步即可正常使用（默认域名有访问频率限制和提示页，日常使用没问题；长期稳定建议升级付费版绑定自定义域名）。<br>· <b>默认网址打不开？</b>① 先在「静态网站托管 → 上传文件」把 outputs/pwa 里的全部文件（含 icons 文件夹）传上去，网址才会生效；② 2025年10月后创建的环境，访问默认域名会先显示「访问提示中间页」，点「继续访问」即可进入；③ 免费版默认域名有访问频率限制，超限会暂时打不开，稍后再试。<br><b>⑤ 在工作台绑定：</b>数据管理 → 云同步 → 同步方式选「<b>腾讯云 CloudBase</b>」→ 「<b>地域（region）</b>」选与你环境一致的一项（默认上海 ap-shanghai，环境概览可查实际地域）→ 粘贴环境ID（正式版已内置会自动带出）→ 点「<b>保存并立即同步</b>」。<br><b>⑥ 多设备：</b>每台设备填同一个环境ID和地域即可互通；同事版用户请填<b>他自己的</b>环境ID，数据互相隔离。<br><b>⑦ 还失败？看报错：</b>提示“PostgreSQL（SQL）类型”→ 环境建错了（PG 模式），按①重新新建传统模式环境或改用 Supabase；提示“登录被拒绝 / 匿名登录未开启”→ 按②开启匿名登录，并确认「地域」与你的环境一致；提示“集合不存在”→ 按③建集合；提示“被浏览器拦截 / CORS”→ 按④处理网址。') +
+    sec('六、绑定 LeanCloud 同步（国内版 / 国际版）', '<b>适合：</b>想在多设备同步数据的用户。LeanCloud 是国产 BaaS，国内访问快；国内版需实名认证，国际版免备案。<br><b>① 注册 / 创建应用：</b>国内版打开 <b>leancloud.cn</b>（需实名认证）注册登录 → 创建应用；国际版打开 <b>leancloud.app</b> 注册（免备案）。<br><b>② 复制凭证：</b>控制台 → 设置 → 应用凭证，复制 <b>AppID</b> 和 <b>AppKey（客户端 Key）</b>。<br><b>③ 在工作台绑定：</b>数据管理 → 云同步 → 同步方式选「<b>LeanCloud</b>」→「<b>LeanCloud 版本</b>」选<b>国内版</b>（域名 https://appid前8位.api.lncldapi.com）或<b>国际版</b>（https://appid前8位.api.lncldglobal.com）→ 粘贴 AppID 和 AppKey → 点「<b>保存并立即同步</b>」。<br>· 首次同步会自动创建两个数据表（WorkbenchSyncMeta / WorkbenchSyncChunk），无需手动建表。<br><b>④ 多设备：</b>每台设备填<b>同一个应用的</b> AppID/AppKey 即可互通；同事版用户请用他自己的 LeanCloud 应用，数据互相隔离。<br><b>⑤ 注意：</b>LeanCloud 默认允许任意网址访问（未设置「Web 安全域名」时），GitHub Pages 上也能正常同步；若你在控制台设置了「Web 安全域名」，记得把工作台网址加进去。')
     sec('七、常见问题', faqHtml) +
     sec('八、安全提示', '· 定期导出备份；不要把正式版链接公开转发（含你的云配置）。<br>· 工作台里不要写极端敏感信息（如身份证号）；云同步数据为明文存储。');
 }
 /* ================= 云同步（多设备实时同步） ================= */
-/* 驱动：LeanCloud 国际版（免备案、国内可直连）/ 腾讯云 CloudBase / 自建 WebDAV（需开启 CORS）
+/* 驱动：LeanCloud（国内版 / 国际版）/ Supabase / 自建 WebDAV（需开启 CORS）
    策略：整库上传，版本号 rev 递增，新版本覆盖旧版本（最后保存者胜）；
    拉取覆盖前若本机还有未上传的修改，会自动在 localStorage 里备份一份，避免丢数据。 */
 
@@ -1132,7 +1132,6 @@ window.DEFAULT_SYNC = Object.assign({
   provider: 'supabase',
   supUrl: 'https://nkfspiaeelwnedsqjveq.supabase.co',  // Supabase Project URL（内置，自动恢复）
   supKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5rZnNwaWFlZWx3bmVkc3FqdmVxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY2OTQ4MzQsImV4cCI6MjEwMjI3MDgzNH0.LoE2sWBZFlQn2iLxXbJC6AKkpleSjpTAgDXtkmyl3yQ',  // anon public（公钥）
-  cbEnv: 'myworkspace-d3gcmop2c0fd4aa8e',  // 腾讯云 CloudBase 环境ID（内置，自动恢复）
   syncKey: 'main'   // 必须与你在工作台“同步空间标识”里填的一致
 }, window.DEFAULT_SYNC || {});
 
@@ -1212,7 +1211,7 @@ const SyncEngine = {
 
   settings: function () {
     const st = DB.data.settings;
-    if (!st.sync) st.sync = { provider: '', appId: '', appKey: '', syncServer: '', supUrl: '', supKey: '', wdUrl: '', wdUser: '', wdPass: '', cbEnv: '', cbRegion: '', syncKey: 'main', pollSec: 10, rev: 0, updatedAt: '', lastSyncAt: '', lastError: '', deviceName: '' };
+    if (!st.sync) st.sync = { provider: '', appId: '', appKey: '', syncServer: '', supUrl: '', supKey: '', wdUrl: '', wdUser: '', wdPass: '', syncLcCn: '1', syncKey: 'main', pollSec: 10, rev: 0, updatedAt: '', lastSyncAt: '', lastError: '', deviceName: '' };
     return st.sync;
   },
   enabled: function () {
@@ -1220,7 +1219,6 @@ const SyncEngine = {
     if (s.provider === 'leancloud') return !!(s.appId && s.appKey);
     if (s.provider === 'supabase') return !!(s.supUrl && s.supKey);
     if (s.provider === 'webdav') return !!(s.wdUrl);
-    if (s.provider === 'cloudbase') return !!(s.cbEnv);
     return false;
   },
   applyDefaultIfNeeded: function () {
@@ -1228,9 +1226,6 @@ const SyncEngine = {
     if (this.enabled()) return false;                 /* 已配置过就不再覆盖 */
     const d = window.DEFAULT_SYNC || {};
     let changed = false;
-    /* 内置腾讯云 CloudBase 环境ID：预填到设置里，切到 CloudBase 时无需再手输 */
-    if (d.cbEnv && !s.cbEnv) { s.cbEnv = String(d.cbEnv).trim(); changed = true; }
-    if (d.cbRegion && !s.cbRegion) { s.cbRegion = String(d.cbRegion).trim(); changed = true; }
     /* 内置 Supabase 配置（地址 + anon 公钥） */
     if (d.supUrl && d.supKey) {
       if (!s.provider) s.provider = d.provider || 'supabase';
@@ -1296,7 +1291,6 @@ const SyncEngine = {
     if (this._driverCache && this._driverCache.type === s.provider) return this._driverCache;
     if (s.provider === 'leancloud') this._driverCache = makeLeanCloudDriver();
     else if (s.provider === 'supabase') this._driverCache = makeSupabaseDriver();
-    else if (s.provider === 'cloudbase') this._driverCache = makeCloudBaseDriver();
     else this._driverCache = makeWebDAVDriver();
     return this._driverCache;
   },
@@ -1445,7 +1439,6 @@ const SyncEngine = {
         s2.syncServer = oldSync.syncServer || '';
         s2.supUrl = oldSync.supUrl || '';
         s2.supKey = oldSync.supKey || '';
-        s2.cbEnv = oldSync.cbEnv || '';
         s2.rev = remote.rev || 0;
         s2.updatedAt = remote.updatedAt || '';
         s2.lastSyncAt = syncNowIso();
@@ -1531,7 +1524,7 @@ const SyncEngine = {
   },
   disconnect: function () {
     const s = this.settings();
-    s.provider = ''; s.appId = ''; s.appKey = ''; s.wdUrl = ''; s.wdUser = ''; s.wdPass = ''; s.cbEnv = ''; s.cbRegion = '';
+    s.provider = ''; s.appId = ''; s.appKey = ''; s.wdUrl = ''; s.wdUser = ''; s.wdPass = ''; s.syncLcCn = '1';
     s.rev = 0; s.updatedAt = ''; s.lastSyncAt = ''; s.lastError = ''; s.syncKey = 'main';
     this._dirty = false;
     this._driverCache = null;
@@ -1543,11 +1536,9 @@ const SyncEngine = {
     const lc = document.querySelector('.sync-fields-lc');
     const sb = document.querySelector('.sync-fields-sb');
     const wd = document.querySelector('.sync-fields-wd');
-    const cb = document.querySelector('.sync-fields-cb');
     if (lc) lc.style.display = (v === 'leancloud') ? '' : 'none';
     if (sb) sb.style.display = (v === 'supabase') ? '' : 'none';
     if (wd) wd.style.display = (v === 'webdav') ? '' : 'none';
-    if (cb) cb.style.display = (v === 'cloudbase') ? '' : 'none';
   },
   statusHtml: function () {
     const s = this.settings();
@@ -1567,104 +1558,60 @@ const SyncEngine = {
     const isLC = s.provider === 'leancloud';
     const isSB = s.provider === 'supabase';
     const isWD = s.provider === 'webdav';
-    const isCB = s.provider === 'cloudbase';
     const providerOpts = [
       ['', '不使用云同步（仅本地）'],
-      ['leancloud', 'LeanCloud 国际版（免备案）'],
+      ['leancloud', 'LeanCloud（国内版 / 国际版）'],
       ['supabase', 'Supabase（PostgreSQL，免费额度大）'],
-      ['cloudbase', '腾讯云 CloudBase（云开发，国内速度快）'],
       ['webdav', '自建 WebDAV（需开启 CORS）']
     ].map(function (o) {
       return '<option value="' + o[0] + '"' + (s.provider === o[0] ? ' selected' : '') + '>' + o[1] + '</option>';
     }).join('');
+    const lcModeOpts = [['1', '国内版（leancloud.cn，需实名认证）'], ['0', '国际版（leancloud.app，免备案）']].map(function (o) { return '<option value="' + o[0] + '"' + (String(s.syncLcCn || '1') === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('');
     const lcFields = '<div class="sync-fields-lc"' + (isLC ? '' : ' style="display:none"') + '>' +
+      field('syncLcCn', 'LeanCloud 版本', s.syncLcCn || '1', 'select', '', lcModeOpts) +
       field('syncAppId', 'AppID', s.appId, 'text', 'placeholder="控制台 → 设置 → 应用凭证 → AppID"') +
       field('syncAppKey', 'AppKey（客户端 Key）', s.appKey, 'password', 'placeholder="控制台 → 设置 → 应用凭证 → AppKey"') +
-      field('syncServer', 'API 服务器地址（可选）', s.syncServer, 'text', 'placeholder="留空自动使用 https://appid前8位.api.lncldglobal.com"') +
+      field('syncServer', 'API 服务器地址（可选）', s.syncServer, 'text', 'placeholder="留空自动使用 https://appid前8位.api.lncldapi.com（国内版）"') +
       '</div>';
     const sbFields = '<div class="sync-fields-sb"' + (isSB ? '' : ' style="display:none"') + '>' +
       field('syncSupUrl', 'Supabase 项目地址（Project URL）', s.supUrl, 'text', 'placeholder="https://xxxx.supabase.co"') +
       field('syncSupKey', 'anon 公钥（anon public）', s.supKey, 'password', 'placeholder="项目设置 → API → anon public"') +
-      '</div>';
-    const cbRegions = [['', '上海（默认 ap-shanghai）'], ['ap-shanghai', '上海 ap-shanghai'], ['ap-guangzhou', '广州 ap-guangzhou'], ['ap-beijing', '北京 ap-beijing'], ['ap-chengdu', '成都 ap-chengdu'], ['ap-nanjing', '南京 ap-nanjing'], ['ap-hongkong', '香港 ap-hongkong'], ['ap-singapore', '新加坡 ap-singapore']];
-    const cbRegionOpts = cbRegions.map(function (o) { return '<option value="' + o[0] + '"' + (String(s.cbRegion || '') === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('');
-    const cbFields = '<div class="sync-fields-cb"' + (isCB ? '' : ' style="display:none"') + '>' +
-      field('syncCbEnv', 'CloudBase 环境 ID（envId）', s.cbEnv, 'text', 'placeholder="云开发控制台 → 环境 → 环境ID，形如 xxxx-1a2b3c"') +
-      field('syncCbRegion', 'CloudBase 地域（region，需与环境实际地域一致）', s.cbRegion, 'select', '', cbRegionOpts) +
       '</div>';
     const wdFields = '<div class="sync-fields-wd"' + (isWD ? '' : ' style="display:none"') + '>' +
       field('syncWdUrl', 'WebDAV 文件地址', s.wdUrl, 'text', 'placeholder="https://主机/dav/banzhuren-sync.json 或目录"') +
       field('syncWdUser', 'WebDAV 用户名', s.wdUser, 'text') +
       field('syncWdPass', 'WebDAV 密码', s.wdPass, 'password') +
       '</div>';
-    const body = lcFields + sbFields + cbFields + wdFields + field('syncKey', '同步空间标识（同一账号多套数据可区分）', s.syncKey || 'main', 'text') +
+    const body = lcFields + sbFields + wdFields + field('syncKey', '同步空间标识（同一账号多套数据可区分）', s.syncKey || 'main', 'text') +
     field('syncPoll', '自动拉取间隔（秒，越快越耗电/流量）', s.pollSec || 10, 'select', '', optionsHtml(['5', '10', '15', '30', '60'], String(s.pollSec || 10)));
     const builtIn = (window.DEFAULT_SYNC && window.DEFAULT_SYNC.supUrl && s.supUrl === String(window.DEFAULT_SYNC.supUrl).trim())
       ? '<div style="font-size:12.5px;color:var(--ok, #16a34a);margin-bottom:8px">📌 已内置 Supabase 配置：更换网址/新设备打开时会自动恢复，无需重新填写。</div>' : '';
-    const builtInCB = (window.DEFAULT_SYNC && window.DEFAULT_SYNC.cbEnv && s.cbEnv === String(window.DEFAULT_SYNC.cbEnv).trim())
-      ? '<div style="font-size:12.5px;color:var(--ok, #16a34a);margin-bottom:8px">📌 已内置腾讯云 CloudBase 环境ID：更换网址/新设备打开时会自动恢复，无需重新填写。</div>' : '';
-    const cbMismatch = (s.provider === 'cloudbase' && window.DEFAULT_SYNC && window.DEFAULT_SYNC.cbEnv && s.cbEnv && s.cbEnv !== String(window.DEFAULT_SYNC.cbEnv).trim())
-      ? '<div style="font-size:12.5px;color:var(--warn, #d97706);margin-bottom:8px">⚠️ 当前填的环境ID（' + esc(s.cbEnv) + '）与内置的新环境ID（' + esc(String(window.DEFAULT_SYNC.cbEnv).trim()) + '）不一致，会导致同步失败。点下方「改用内置环境ID」即可修复，然后点「保存并立即同步」。</div>' : '';
     return '<div class="card"><div class="card-title">☁️ 云同步（多设备实时同步）</div>' +
-      '<div id="syncStatus" class="sync-status">' + this.statusHtml() + '</div>' + demoNotice + builtIn + builtInCB + cbMismatch +
+      '<div id="syncStatus" class="sync-status">' + this.statusHtml() + '</div>' + demoNotice + builtIn +
       '<div style="font-size:12.5px;color:var(--text3);margin-bottom:10px">在每台设备打开本工作台并填写<b>相同</b>的云同步凭据即可互通：本机修改约 2 秒自动上传，自动拉取间隔可调（默认 10 秒），也可手动同步。</div>' +
       '<div class="form-grid"><div class="field"><label>同步方式</label><select data-field="syncProvider">' + providerOpts + '</select></div>' + body + '</div>' +
       '<div class="btn-row" style="margin-top:12px">' +
       '<button class="btn primary" data-action="saveSync">保存并立即同步</button>' +
       '<button class="btn primary" data-action="pushNow">📤 立即上传到云端</button>' +
       '<button class="btn outline" data-action="syncPull">立即拉取</button>' +
-      '<button class="btn outline" data-action="cbDiag">🔍 CloudBase 网络诊断</button>' +
       '<button class="btn outline" data-action="cloudCheck">🔍 检测云端</button>' +
-      (s.provider === 'cloudbase' && window.DEFAULT_SYNC && window.DEFAULT_SYNC.cbEnv ? '<button class="btn outline" data-action="cbUseBuiltin">改用内置环境ID</button>' : '') +
       '<button class="btn danger" data-action="syncDisconnect">断开云同步</button>' +
       '</div>' +
       '<div style="margin-top:12px;font-size:12px;color:var(--text3);line-height:1.9">' +
       '<b>冲突规则：</b>多台设备同时编辑时以“最后保存的版本”为准；覆盖前会自动在浏览器里备份一份（banzhuren_sync_backup_*），不会丢数据。<br>' +
-      (isLC ? '<b>LeanCloud 配置步骤：</b>① 打开 leancloud.app 注册国际版（免备案、国内可直连）→ 创建应用；② 进入 设置 → 应用凭证，复制 AppID 和 AppKey；③ 粘贴后点“保存并立即同步”，首次同步会自动创建两个数据表（WorkbenchSyncMeta / WorkbenchSyncChunk）。<br><b>注意：</b>国际版近期可能暂停新用户注册；若无法注册，请改用 Supabase 或腾讯云 CloudBase。' : '') +
+      (isLC ? '<b>LeanCloud 配置步骤：</b>① 国内版打开 <b>leancloud.cn</b>（需实名认证）注册并创建应用；国际版打开 <b>leancloud.app</b>；② 控制台 → 设置 → 应用凭证，复制 AppID 和 AppKey；③ 「LeanCloud 版本」选国内版或国际版 → 粘贴后点“保存并立即同步”，首次同步自动创建两个数据表（WorkbenchSyncMeta / WorkbenchSyncChunk）。<br>国内版域名：https://appid前8位.api.lncldapi.com。' : '') +
       (isSB ? '<b>Supabase 配置步骤：</b>① 注册 supabase.com 并创建项目；② 打开 SQL Editor，执行建表 + 授权 SQL（完整代码见 README-云同步与部署.md）；③ 项目设置 → API，复制 Project URL 和 anon public 粘贴到上方；④ 点“保存并立即同步”。' : '') +
-      (isCB ? '<b>腾讯云 CloudBase 配置步骤：</b>① 新建环境时<b>不要选「PostgreSQL / PG 模式」</b>（选了就只有“新建表”、没有“集合”，同步必失败；已建的环境<b>不可切换</b>，只能重新新建）→ 复制「环境ID（envId）」；② 环境 → 登录授权 → 开启「匿名登录」；③ 数据库新建两个集合并设「所有用户可读写」：workbench_sync_meta、workbench_sync_chunk；④ 免费版没有「安全域名」入口？把工作台部署到 CloudBase「静态网站托管」，用默认网址 https://<环境ID>.tcloudbaseapp.com 打开即可（该域名官方已自动放行，无需手动配置）；⑤ 粘贴环境ID后点“保存并立即同步”。' : '') +
       (isWD ? '<b>WebDAV 要求：</b>服务器（如 Cloudreve、Nextcloud）必须开启跨域 CORS，并支持 PUT/GET/DELETE；填入文件完整地址即可。' : '') +
       '</div></div>';
   }
 };
 function syncCardHtml() { return SyncEngine.cardHtml(); }
 
-/* ---------- CloudBase 网络诊断：区分 跨域拦截 / 网络不通 / 接口正常 ---------- */
-function cloudbaseDiag() {
-  const s = SyncEngine.settings();
-  const envId = String(s.cbEnv || '').trim();
-  const region = String(s.cbRegion || '').trim() || 'ap-shanghai';
-  const api = 'https://' + envId + '.' + region + '.tcb-api.tencentcloudapi.com';
-  const lines = [];
-  lines.push('🕐 诊断时间：' + fmtSyncTime(syncNowIso()));
-  lines.push('🌐 当前网址：' + location.origin + '（' + location.protocol + '）');
-  lines.push('📶 浏览器在线：' + (navigator.onLine ? '是' : '否'));
-  lines.push('☁️ CloudBase 接口：' + api);
-  lines.push('--------------------------------');
-  async function probe(name, url, opts) {
-    const t0 = Date.now();
-    try {
-      const r = await fetchTimeout(url, opts, 12000);
-      return '✅ ' + name + '：可访问（HTTP ' + r.status + '，' + (Date.now() - t0) + 'ms）';
-    } catch (e) {
-      return '❌ ' + name + '：失败（' + errMsg(e) + '，' + (Date.now() - t0) + 'ms）';
-    }
-  }
-  (async function () {
-    lines.push(await probe('① CloudBase 登录接口（模拟浏览器跨域请求）', api + '/auth/v1/signin/anonymously', { method: 'OPTIONS', headers: { 'Origin': location.origin, 'Access-Control-Request-Method': 'POST', 'Access-Control-Request-Headers': 'content-type,x-device-id,x-sdk-version,x-seqid' } }));
-    lines.push(await probe('② CloudBase 网络连通性（no-cors，不受跨域限制）', api + '/', { method: 'HEAD', mode: 'no-cors' }));
-    lines.push(await probe('③ SDK 加载源 static.cloudbase.net', 'https://static.cloudbase.net/cloudbase-js-sdk/latest/cloudbase.full.js', { method: 'GET', mode: 'no-cors' }));
-    lines.push(await probe('④ 数据库网关（关键：GitHub Pages 等未授权网址会被它 403 拒绝）', 'https://' + envId + '.api.tcloudbasegateway.com/v1/database/instances/%28default%29/databases/' + envId + '/collections/workbench_sync_chunk/documents', { method: 'OPTIONS', headers: { 'Origin': location.origin, 'Access-Control-Request-Method': 'POST' } }));
-    lines.push('--------------------------------');
-    lines.push('怎么看结果：④失败(403) = 当前网址不在 CloudBase 安全域名白名单，这个网址上 CloudBase 同步永远用不了：要么把工作台部署到 CloudBase 静态托管用默认网址打开，要么改用 Supabase；④成功 = 网关放行，同步应可用。');
-    openModal('<div style="font-size:13px;line-height:2.1;white-space:pre-wrap">' + esc(lines.join('\n')) + '</div>', { title: '🔍 CloudBase 网络诊断' });
-  })();
-}
-
-/* ---------- LeanCloud 国际版驱动 ---------- */
+/* ---------- LeanCloud（国内版 / 国际版）驱动 ---------- */
 function makeLeanCloudDriver() {
   const s = SyncEngine.settings();
-  const host = s.syncServer ? (s.syncServer.replace(/\/+$/, '') + '/1.1/classes/') : ('https://' + s.appId.slice(0, 8).toLowerCase() + '.api.lncldglobal.com/1.1/classes/');
+  const lcApi = String(s.syncLcCn || '1') === '1' ? 'api.lncldapi.com' : 'api.lncldglobal.com';
+  const host = s.syncServer ? (s.syncServer.replace(/\/+$/, '') + '/1.1/classes/') : ('https://' + String(s.appId || '').slice(0, 8).toLowerCase() + '.' + lcApi + '/1.1/classes/');
   const headers = { 'X-LC-Id': s.appId, 'X-LC-Key': s.appKey, 'Content-Type': 'application/json' };
   const where = encodeURIComponent(JSON.stringify({ syncKey: s.syncKey || 'main' }));
   let metaObjId = null;
@@ -1820,207 +1767,6 @@ function makeSupabaseDriver() {
 }
 
 
-/* ---------- 腾讯云 CloudBase 驱动（云开发 Web SDK + 匿名登录，需开启匿名登录并放行安全域名） ---------- */
-/* ---------- 腾讯云 CloudBase 驱动（直连 REST，不依赖官方 SDK） ----------
-   注意：CloudBase 数据库网关 *.api.tcloudbasegateway.com 只放行“安全域名”白名单里的来源，
-   GitHub Pages 等未授权网址会被网关 403 拒绝（浏览器表现为 Failed to fetch / CORS 拦截）。
-   因此 CloudBase 同步只适用于：把工作台部署到 CloudBase「静态网站托管」并用默认网址打开。 */
-function makeCloudBaseDriver() {
-  const s = SyncEngine.settings();
-  const envId = String(s.cbEnv || '').trim();
-  const region = String(s.cbRegion || '').trim() || 'ap-shanghai';
-  const key = function () { return String(s.syncKey || 'main').trim() || 'main'; };
-  const AUTH_HOST = 'https://' + envId + '.' + region + '.tcb-api.tencentcloudapi.com';
-  const DB_BASE = 'https://' + envId + '.api.tcloudbasegateway.com/v1/database/instances/%28default%29/databases/' + envId;
-  const metaId = function () { return 'meta_' + hashStr(key()); };
-  let _token = '';
-  let _tokenExp = 0;
-  let _deviceId = '';
-
-  function cbDeviceId() {
-    if (_deviceId) return _deviceId;
-    try {
-      _deviceId = localStorage.getItem('cb_device_id') || '';
-      if (!_deviceId) { _deviceId = 'dev-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 12); localStorage.setItem('cb_device_id', _deviceId); }
-    } catch (e) { _deviceId = 'dev-' + Date.now().toString(36); }
-    return _deviceId;
-  }
-
-  async function login() {
-    const res = await fetchTimeout(AUTH_HOST + '/auth/v1/signin/anonymously', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-device-id': cbDeviceId(), 'X-SDK-Version': '@cloudbase/js-sdk/1.8.10' },
-      body: '{}'
-    }, 15000);
-    const txt = await res.text().catch(function () { return ''; });
-    let data = null;
-    try { data = txt ? JSON.parse(txt) : null; } catch (e) {}
-    if (!res.ok || !data || !data.access_token) {
-      const em = (data && (data.error_description || data.message || data.error)) ? (data.error_description || data.message || data.error) : ('HTTP ' + res.status + ' ' + txt.slice(0, 120));
-      const low = String(em).toLowerCase();
-      if (low.indexOf('login_type_disabled') >= 0 || low.indexOf('unauthenticated') >= 0 || String(em).indexOf('匿名登录') >= 0 || String(em).indexOf('登录方式未开启') >= 0) {
-        throw new Error('CloudBase 匿名登录未开启：请在云开发控制台「登录授权」中开启「匿名登录」（当前环境 ' + envId + '）。直达：https://tcb.cloud.tencent.com/dev?envId=' + envId + '#/identity/login-manage');
-      }
-      throw new Error('CloudBase 登录失败：' + em + '（请确认环境ID正确、已开启“匿名登录”）');
-    }
-    _token = data.access_token;
-    _tokenExp = Date.now() + (((data.expires_in || 7200) - 60) * 1000);
-    return _token;
-  }
-
-  async function ensureToken() {
-    if (_token && Date.now() < _tokenExp) return _token;
-    return login();
-  }
-
-  function parseEJSON(v) {
-    if (v && typeof v === 'object') {
-      if (typeof v.$numberInt === 'string') return parseInt(v.$numberInt, 10);
-      if (typeof v.$numberLong === 'string') return parseFloat(v.$numberLong);
-      if (typeof v.$numberDouble === 'string') return parseFloat(v.$numberDouble);
-    }
-    return v;
-  }
-  function toEJSONQuery(obj) {
-    const out = {};
-    Object.keys(obj).forEach(function (k) {
-      const val = obj[k];
-      if (typeof val === 'number') out[k] = { $numberInt: String(Math.trunc(val)) };
-      else if (val && typeof val === 'object') {
-        const inner = {};
-        Object.keys(val).forEach(function (op) {
-          const v2 = val[op];
-          inner[op] = (typeof v2 === 'number') ? { $numberInt: String(Math.trunc(v2)) } : v2;
-        });
-        out[k] = inner;
-      } else out[k] = val;
-    });
-    return JSON.stringify(out);
-  }
-
-  async function db(path, opts) {
-    for (let attempt = 0; attempt < 2; attempt++) {
-      const token = await ensureToken();
-      const sep = path.indexOf('?') >= 0 ? '&' : '?';
-      const url = DB_BASE + path + sep + 'env=' + encodeURIComponent(envId);
-      opts = opts || {};
-      const headers = Object.assign({}, opts.headers || {}, {
-        'Authorization': 'Bearer ' + token,
-        'Content-Type': 'application/json',
-        'x-device-id': cbDeviceId(),
-        'X-Request-Id': 'rq' + Math.random().toString(36).slice(2, 10)
-      });
-      const res = await fetchTimeout(url, Object.assign({}, opts, { headers: headers }), 20000);
-      const txt = await res.text().catch(function () { return ''; });
-      let data = null;
-      try { data = txt ? JSON.parse(txt) : null; } catch (e) {}
-      if (res.status === 401) { _token = ''; _tokenExp = 0; continue; }
-      if (res.status === 403) {
-        const err = new Error('CloudBase 数据库网关拒绝当前网址（HTTP 403）：' + location.origin + ' 不在 CloudBase 安全域名白名单里，这个网址上无法使用 CloudBase 同步。请改用内置的 Supabase 同步（同步方式选 Supabase 保存即可），或把工作台部署到 CloudBase「静态网站托管」用默认网址打开后再用 CloudBase。');
-        err.status = 403;
-        throw err;
-      }
-      if (!res.ok) {
-        const em = (data && (data.message || data.error_description)) ? (data.message || data.error_description) : ('HTTP ' + res.status + ' ' + txt.slice(0, 120));
-        const err = new Error(em);
-        err.code = data && data.code;
-        err.status = res.status;
-        throw err;
-      }
-      return data;
-    }
-    const e2 = new Error('CloudBase 授权失败（token 无效）');
-    e2.status = 401;
-    throw e2;
-  }
-
-  return {
-    type: 'cloudbase',
-    getMeta: async function () {
-      try {
-        const res = await db('/collections/workbench_sync_meta/documents/' + encodeURIComponent(metaId()), { method: 'GET' });
-        if (!res || !res._id) return null;
-        return {
-          syncKey: res.syncKey,
-          rev: parseEJSON(res.rev) || 0,
-          updatedAt: res.updatedAt || '',
-          deviceId: res.deviceId || '',
-          checksum: res.checksum || '',
-          size: parseEJSON(res.size) || 0,
-          enc: res.enc || 'none'
-        };
-      } catch (e) {
-        if (e && (e.code === 'DOCUMENT_NOT_FOUND' || e.status === 404)) return null;
-        throw e;
-      }
-    },
-    fetchPayload: async function () {
-      const m = await this.getMeta();
-      const rev = (m && m.rev) || 0;
-      const q = encodeURIComponent(toEJSONQuery({ syncKey: key(), rev: rev }));
-      const res = await db('/collections/workbench_sync_chunk/documents?offset=0&limit=1000&query=' + q, { method: 'GET' });
-      const rows = (res && res.list) || [];
-      if (!rows.length) throw new Error('云端没有数据块');
-      rows.sort(function (a, b) { return (parseEJSON(a.idx) || 0) - (parseEJSON(b.idx) || 0); });
-      let out = '';
-      rows.forEach(function (r) { out += r.payload || ''; });
-      return out;
-    },
-    push: async function (payload, meta) {
-      const k = key();
-      function isDup(er) { const m = String((er && er.message) || er || ''); return m.indexOf('E11000') >= 0 || m.indexOf('duplicate key') >= 0 || m.indexOf('bulk write') >= 0 || m.indexOf('multiple write') >= 0; }
-      /* 0. 先尽力清掉本同步标识的旧数据块（清不掉也没关系，下面有兜底） */
-      try { await db('/collections/workbench_sync_chunk/documents/remove', { method: 'POST', body: JSON.stringify({ query: { syncKey: k }, multi: true }) }); } catch (e0) {}
-      /* 1. 写新数据块：_id = 同步标识+版本+序号 */
-      const chunks = [];
-      for (let i = 0; i < payload.length; i += SYNC_CHUNK_SIZE) chunks.push(payload.slice(i, i + SYNC_CHUNK_SIZE));
-      if (!chunks.length) chunks.push('');
-      const docs = chunks.map(function (c, i) {
-        return { _id: 'chunk_' + hashStr(k) + '_' + meta.rev + '_' + i, syncKey: k, rev: meta.rev, idx: i, total: chunks.length, payload: c, deviceId: meta.deviceId };
-      });
-      try {
-        await db('/collections/workbench_sync_chunk/documents', { method: 'POST', body: JSON.stringify({ data: docs }) });
-      } catch (e1) {
-        if (!isDup(e1)) throw e1;
-        /* 部分块已存在（上次同版本上传到一半）：逐个补插，已存在的跳过 */
-        for (let i = 0; i < docs.length; i++) {
-          try { await db('/collections/workbench_sync_chunk/documents', { method: 'POST', body: JSON.stringify({ data: [docs[i]] }) }); }
-          catch (e2) { if (!isDup(e2)) throw e2; }
-        }
-      }
-      /* 2. 版本记录：先尝试 upsert；若因权限/已存在失败，删除后重建 */
-      try {
-        await db('/collections/workbench_sync_meta/documents', {
-          method: 'PATCH',
-          body: JSON.stringify({
-            query: { _id: metaId() },
-            data: { syncKey: k, rev: meta.rev, updatedAt: meta.updatedAt, deviceId: meta.deviceId, checksum: meta.checksum, size: meta.size, enc: meta.enc },
-            upsert: true,
-            multi: false
-          })
-        });
-      } catch (em) {
-        if (!isDup(em)) throw em;
-        try { await db('/collections/workbench_sync_meta/documents/remove', { method: 'POST', body: JSON.stringify({ query: { _id: metaId() }, multi: true }) }); } catch (e2) {}
-        await db('/collections/workbench_sync_meta/documents', { method: 'POST', body: JSON.stringify({ data: [{ _id: metaId(), syncKey: k, rev: meta.rev, updatedAt: meta.updatedAt, deviceId: meta.deviceId, checksum: meta.checksum, size: meta.size, enc: meta.enc }] }) });
-      }
-      /* 3. 清理旧版本残留数据块（失败不影响本次上传） */
-      try {
-        await db('/collections/workbench_sync_chunk/documents/remove', {
-          method: 'POST',
-          body: JSON.stringify({ query: { syncKey: k, rev: { $ne: meta.rev } }, multi: true })
-        });
-      } catch (e3) {}
-    },
-    deleteRemote: async function () {
-      const k = key();
-      let n = 0;
-      try { const r = await db('/collections/workbench_sync_chunk/documents/remove', { method: 'POST', body: JSON.stringify({ query: { syncKey: k }, multi: true }) }); n += (r && r.deleted) || 0; } catch (e) {}
-      try { const r = await db('/collections/workbench_sync_meta/documents/remove', { method: 'POST', body: JSON.stringify({ query: { _id: metaId() }, multi: true }) }); n += (r && r.deleted) || 0; } catch (e) {}
-      return n;
-    }
-  };
-}
 /* ================= 应用核心 ================= */
 const state = {
   module: 'dashboard',
@@ -2850,7 +2596,7 @@ const ACTIONS = {
     if (s.provider === 'leancloud') { s.appId = (v.syncAppId || '').trim(); s.appKey = v.syncAppKey || ''; s.syncServer = (v.syncServer || '').trim(); }
     if (s.provider === 'supabase') { s.supUrl = (v.syncSupUrl || '').trim(); s.supKey = v.syncSupKey || ''; }
     if (s.provider === 'webdav') { s.wdUrl = (v.syncWdUrl || '').trim(); s.wdUser = (v.syncWdUser || '').trim(); s.wdPass = v.syncWdPass || ''; }
-    if (s.provider === 'cloudbase') { s.cbEnv = (v.syncCbEnv || '').trim(); }
+    if (s.provider === 'leancloud') { s.syncLcCn = v.syncLcCn || '1'; }
     if (v.syncPoll) { s.pollSec = parseInt(v.syncPoll, 10) || 10; }
     if (v.syncKey) s.syncKey = String(v.syncKey).trim() || 'main';
     s.deviceName = (DB.data.settings.teacherName || '我的') + '的设备';
@@ -2863,18 +2609,7 @@ const ACTIONS = {
     if (!SyncEngine.enabled()) { toast('已保存：云同步未启用'); return; }
     SyncEngine.push();
   },
-  cbUseBuiltin: function () {
-    const d = window.DEFAULT_SYNC || {};
-    if (!d.cbEnv) { toast('没有内置的 CloudBase 环境ID', 'err'); return; }
-    const s = SyncEngine.settings();
-    s.cbEnv = String(d.cbEnv).trim();
-    SyncEngine._driverCache = null;
-    SyncEngine._saveMeta();
-    render();
-    toast('已改用内置环境ID：' + s.cbEnv + '，请点“保存并立即同步”');
-  },
   syncPull: function () { if (DB.data.settings) DB.data.settings.cleanSlate = false; SyncEngine.pull(false); },
-  cbDiag: function () { cloudbaseDiag(); },
   syncDisconnect: function () {
     confirmBox({ title: '断开云同步', message: '断开后本机不再上传/下载云端数据，本地数据会完整保留；云端数据也保留，之后可随时重新连接。确定断开吗？', danger: true, okText: '断开', onOk: function () { SyncEngine.disconnect(); } });
   },
