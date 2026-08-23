@@ -1597,8 +1597,10 @@ const SyncEngine = {
       ? '<div style="font-size:12.5px;color:var(--ok, #16a34a);margin-bottom:8px">📌 已内置 Supabase 配置：更换网址/新设备打开时会自动恢复，无需重新填写。</div>' : '';
     const builtInCB = (window.DEFAULT_SYNC && window.DEFAULT_SYNC.cbEnv && s.cbEnv === String(window.DEFAULT_SYNC.cbEnv).trim())
       ? '<div style="font-size:12.5px;color:var(--ok, #16a34a);margin-bottom:8px">📌 已内置腾讯云 CloudBase 环境ID：更换网址/新设备打开时会自动恢复，无需重新填写。</div>' : '';
+    const cbMismatch = (s.provider === 'cloudbase' && window.DEFAULT_SYNC && window.DEFAULT_SYNC.cbEnv && s.cbEnv && s.cbEnv !== String(window.DEFAULT_SYNC.cbEnv).trim())
+      ? '<div style="font-size:12.5px;color:var(--warn, #d97706);margin-bottom:8px">⚠️ 当前填的环境ID（' + esc(s.cbEnv) + '）与内置的新环境ID（' + esc(String(window.DEFAULT_SYNC.cbEnv).trim()) + '）不一致，会导致同步失败。点下方「改用内置环境ID」即可修复，然后点「保存并立即同步」。</div>' : '';
     return '<div class="card"><div class="card-title">☁️ 云同步（多设备实时同步）</div>' +
-      '<div id="syncStatus" class="sync-status">' + this.statusHtml() + '</div>' + demoNotice + builtIn + builtInCB +
+      '<div id="syncStatus" class="sync-status">' + this.statusHtml() + '</div>' + demoNotice + builtIn + builtInCB + cbMismatch +
       '<div style="font-size:12.5px;color:var(--text3);margin-bottom:10px">在每台设备打开本工作台并填写<b>相同</b>的云同步凭据即可互通：本机修改约 2 秒自动上传，自动拉取间隔可调（默认 10 秒），也可手动同步。</div>' +
       '<div class="form-grid"><div class="field"><label>同步方式</label><select data-field="syncProvider">' + providerOpts + '</select></div>' + body + '</div>' +
       '<div class="btn-row" style="margin-top:12px">' +
@@ -1606,6 +1608,7 @@ const SyncEngine = {
       '<button class="btn primary" data-action="pushNow">📤 立即上传到云端</button>' +
       '<button class="btn outline" data-action="syncPull">立即拉取</button>' +
       '<button class="btn outline" data-action="cloudCheck">🔍 检测云端</button>' +
+      (s.provider === 'cloudbase' && window.DEFAULT_SYNC && window.DEFAULT_SYNC.cbEnv ? '<button class="btn outline" data-action="cbUseBuiltin">改用内置环境ID</button>' : '') +
       '<button class="btn danger" data-action="syncDisconnect">断开云同步</button>' +
       '</div>' +
       '<div style="margin-top:12px;font-size:12px;color:var(--text3);line-height:1.9">' +
@@ -2745,6 +2748,16 @@ const ACTIONS = {
     render();
     if (!SyncEngine.enabled()) { toast('已保存：云同步未启用'); return; }
     SyncEngine.push();
+  },
+  cbUseBuiltin: function () {
+    const d = window.DEFAULT_SYNC || {};
+    if (!d.cbEnv) { toast('没有内置的 CloudBase 环境ID', 'err'); return; }
+    const s = SyncEngine.settings();
+    s.cbEnv = String(d.cbEnv).trim();
+    SyncEngine._driverCache = null;
+    SyncEngine._saveMeta();
+    render();
+    toast('已改用内置环境ID：' + s.cbEnv + '，请点“保存并立即同步”');
   },
   syncPull: function () { if (DB.data.settings) DB.data.settings.cleanSlate = false; SyncEngine.pull(false); },
   syncDisconnect: function () {
