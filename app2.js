@@ -1833,10 +1833,18 @@ function makeCloudBaseDriver() {
     const hasUser = function () { const st = (auth.hasLoginState && auth.hasLoginState()); return !!(st && st.user); };
     if (hasUser()) return db;
     let loginErr = null;
-    try {
-      if (auth.signInAnonymously) await auth.signInAnonymously();
-      else await auth.anonymousAuthProvider().signIn();
-    } catch (e) { loginErr = e; }
+    const doSignIn = async function () {
+      /* CloudBase SDK 的 signInAnonymously 失败时不抛异常，而是把错误放在返回值的 error 字段里，必须检查 */
+      const r = auth.signInAnonymously ? await auth.signInAnonymously() : await auth.anonymousAuthProvider().signIn();
+      if (r && r.error) throw r.error;
+      return r;
+    };
+    try { await doSignIn(); } catch (e) { loginErr = e; }
+    if (loginErr) {
+      /* 可能是旧的登录态残留导致登录被拒：先退出清理，再自动重试一次 */
+      try { if (auth.signOut) await auth.signOut(); } catch (e2) {}
+      try { await doSignIn(); loginErr = null; } catch (e3) { loginErr = e3; }
+    }
     if (loginErr) {
       const em = errMsg(loginErr);
       const low = em.toLowerCase();
@@ -1867,10 +1875,10 @@ function makeCloudBaseDriver() {
       return new Error('你的 CloudBase 环境是 PostgreSQL（SQL）类型，没有「文档型数据库」：本工作台的 CloudBase 同步需要文档型数据库（集合）。请在控制台新建一个包含「文档型数据库」的环境（不要选 PG 模式/只选 PostgreSQL），或改用 Supabase / LeanCloud 同步。');
     }
     if (/collection|集合|not exist|不存在/i.test(em)) {
-      return new Error('CloudBase 集合不存在或无权访问：请在控制台创建 workbench_sync_meta、workbench_sync_chunk 两个集合并设为「所有用户可读写」');
+      return new Error('CloudBase 集合不存在或无权访问：请在控制台创建 workbench_sync_meta、workbench_sync_chunk 两个集合并设为「所有用户可读写」。原始错误：' + em);
     }
     if (/permission|denied|deny|权限/i.test(em)) {
-      return new Error('CloudBase 数据库权限不足：请把 workbench_sync_meta、workbench_sync_chunk 权限设为「所有用户可读写」');
+      return new Error('CloudBase 数据库权限不足：请把 workbench_sync_meta、workbench_sync_chunk 权限设为「所有用户可读写」。原始错误：' + em);
     }
     return new Error(action + '：' + em + '（环境 ' + envId + ' · 地域 ' + region + '）');
   }
@@ -1889,7 +1897,9 @@ function makeCloudBaseDriver() {
     fetchPayload: async function () {
       const d = await ensure();
       try {
-        const res = await d.collection('workbench_sync_chunk').where({ syncKey: key() }).limit(1000).get();
+        const m = await this.getMeta();
+        const rev = (m && m.rev) || 0;
+        const res = await d.collection('workbench_sync_chunk').where({ syncKey: key(), rev: rev }).limit(1000).get();
         const rows = (res && res.data) || [];
         if (!rows.length) throw new Error('云端没有数据块');
         rows.sort(function (a, b) { return (a.idx || 0) - (b.idx || 0); });
@@ -1902,14 +1912,22 @@ function makeCloudBaseDriver() {
       const d = await ensure();
       const k = key();
       try {
-        /* 先删旧块，再传新块，最后写 meta（保证 meta.rev 永远指向完整数据） */
+        /* 先尽力删旧块（删除失败不影响：新数据块用“版本号+序号”作为唯一 _id，绝不会撞键） */
         try { await d.collection('workbench_sync_chunk').where({ syncKey: k }).remove(); } catch (e) {}
         const chunks = [];
         for (let i = 0; i < payload.length; i += SYNC_CHUNK_SIZE) chunks.push(payload.slice(i, i + SYNC_CHUNK_SIZE));
         for (let i = 0; i < chunks.length; i++) {
-          await d.collection('workbench_sync_chunk').doc('chunk_' + hashStr(k) + '_' + i).set({ syncKey: k, idx: i, total: chunks.length, payload: chunks[i], rev: meta.rev, deviceId: meta.deviceId });
+          await d.collection('workbench_sync_chunk').doc('chunk_' + hashStr(k) + '_' + meta.rev + '_' + i).set({ syncKey: k, rev: meta.rev, idx: i, total: chunks.length, payload: chunks[i], deviceId: meta.deviceId });
         }
-        await d.collection('workbench_sync_meta').doc(metaId()).set({ syncKey: k, rev: meta.rev, updatedAt: meta.updatedAt, deviceId: meta.deviceId, checksum: meta.checksum, size: meta.size, enc: meta.enc });
+        /* meta 用固定 _id：先尝试 update，文档不存在时再 set（避免重复键冲突） */
+        const metaDoc = d.collection('workbench_sync_meta').doc(metaId());
+        try { await metaDoc.update({ syncKey: k, rev: meta.rev, updatedAt: meta.updatedAt, deviceId: meta.deviceId, checksum: meta.checksum, size: meta.size, enc: meta.enc }); }
+        catch (e2) { await metaDoc.set({ syncKey: k, rev: meta.rev, updatedAt: meta.updatedAt, deviceId: meta.deviceId, checksum: meta.checksum, size: meta.size, enc: meta.enc }); }
+        /* 清理旧版本残留数据块（rev 不等于本次），失败不影响本次上传 */
+        try {
+          const cmd = d.command;
+          if (cmd) await d.collection('workbench_sync_chunk').where({ syncKey: k, rev: cmd.neq(meta.rev) }).remove();
+        } catch (e3) {}
       } catch (e) { throw cbErr('上传云端失败', e); }
     },
     deleteRemote: async function () {
