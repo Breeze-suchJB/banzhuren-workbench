@@ -1101,7 +1101,8 @@ function renderHelp() {
     ['为什么手机删学生电脑能同步，但“一键清空”不能？', '普通修改（如删学生）是增量同步：云端版本+1，其他设备拉取新版本即可，很稳定。“一键清空”是“推翻一切”的特殊操作，要求其他设备在线、是最新版、云端允许写入清空标记、且本地没有未上传改动，任一不满足就不同步。所以清空请在每一台设备上各执行一次。'],
     ...(isDemo ? [] : [['换电脑 / 新设备怎么用？', '直接用浏览器打开正式版链接：https://breeze-suchJB.github.io/banzhuren-workbench/ 。首次打开会自动内置 Supabase 配置并拉取云端数据，请先等它拉取完成再录入，避免覆盖云端。']]),
     ['演示数据会传到云端吗？', '不会自动上传：重新生成演示数据后进入“演示模式”，本地改动不会自动上传，避免覆盖真实数据。确认要上传时，点“📤 立即上传到云端”。'],
-    ['怎么绑定腾讯云 CloudBase 同步？', '详细步骤见上方「五、绑定腾讯云 CloudBase 同步（详细步骤）」。要点：环境要含「云数据库」（就是文档型数据库，有“新建集合”）；开启「匿名登录」；建 workbench_sync_meta、workbench_sync_chunk 两个集合并设为「所有用户可读写」；然后云同步选「腾讯云 CloudBase」填环境ID即可。'],
+    ['怎么绑定腾讯云 CloudBase 同步？', '详细步骤见上方「六、绑定腾讯云 CloudBase 同步（详细步骤）」。要点：环境要含「云数据库」（就是文档型数据库，有“新建集合”）；开启「匿名登录」；建 workbench_sync_meta、workbench_sync_chunk 两个集合并设为「所有用户可读写」；然后云同步选「腾讯云 CloudBase」填环境ID即可。'],
+    ['怎么绑定 Supabase 同步？', '详细步骤见上方「五、绑定 Supabase 同步（详细步骤）」。要点：supabase.com 注册建项目 → SQL Editor 执行建表 SQL（见该章节）→ Project Settings → API 复制 Project URL + anon 公钥 → 云同步选「Supabase」粘贴即可（正式版已内置，自动带出）。'],
     ['云同步失败怎么办？', '检查网络；确认配置无误（Supabase：地址 + anon 公钥；CloudBase：环境ID + 开启匿名登录 + 安全域名；LeanCloud：AppID/AppKey）。数据库需允许读写（Supabase 关 RLS 或授权；CloudBase 权限设为“所有用户可读写”）。可在云同步卡片点“🔍 检测云端”看云端到底有没有数据。'],
     ['清空后数据又回来了？', '本地刷新不会回来（清净状态）。若你“立即拉取”又拉回旧数据，说明云端没删干净：Supabase 在 SQL Editor 执行 delete from workbench_sync;（CloudBase 删除 workbench_sync_meta / workbench_sync_chunk 两个集合的数据），或检查表权限。'],
     ['怎样彻底隔离旧数据，防止弄混？', '把“同步空间标识”换成一个新名字（例如 real2026），旧数据在旧标识下，永远混不进来；所有设备用同一个新标识即可互通。'],
@@ -1114,9 +1115,10 @@ function renderHelp() {
     sec('二、数据与多设备同步', '· 数据存在每台设备的浏览器本地；云端 = Supabase / 腾讯云 CloudBase 等（在 数据管理→云同步 选择）。<br>· 腾讯云 CloudBase 需「文档型数据库」环境（控制台里有“新建集合”）；若环境只有 SQL/PostgreSQL（只能新建表），请改用 Supabase 或 LeanCloud。<br>· 新设备打开会自动内置配置并拉取；也可在 数据管理→云同步 手动填写对应凭据（如 Supabase 项目地址 + anon 公钥）→“保存并立即同步”。<br>· 本机修改约 2 秒自动上传；自动拉取间隔可调（5/10/15/30/60 秒，默认 10 秒）。<br>· 其他设备需在线 + 最新版，刷新/重开一次即可拿到最新。') +
     sec('三、各功能板块', '<div class="help-grid">' + modHtml + '</div>') +
     sec('四、常用操作', '· <b>备份</b>：数据管理 → 导出 JSON 完整备份（重要操作前先备份）。<br>· <b>导入学生</b>：学生管理 → 导入 CSV（表头含：学号,姓名,性别,住校,职务,家庭情况,家长1姓名,家长1关系,家长1手机号,家长2姓名,家长2关系,家长2手机号,监护人,入学日期,小组编号,预警标签,标签）。<br>· <b>导入成绩</b>：成绩录入 → 打开考试 → “📄 空白模板”→ 填好 → “📥 导入 CSV” → 保存成绩。<br>· <b>按时间段导出</b>：导出学生 CSV 时可选起止日期，自动附带期内考勤/积分/违纪/沟通统计。<br>· <b>科目顺序</b>：成绩录入/个人成绩/班级成员成绩 → “编辑科目”可拖动或 ◀▶ 调整，三处一致。<br>· <b>留痕</b>：工作日志、德育活动可拍照/上传截图，自动压缩。<br>· <b>值日/座位</b>：值日可“一键轮换”“自动刷新名单”；座位支持两人同桌、随机分配、自动适配人数。') +
-    sec('五、绑定腾讯云 CloudBase 同步（详细步骤）', '<b>适合：</b>想把数据同步到腾讯云的用户（同事版用户用<b>自己的</b>腾讯云账号，数据与别人隔离）。<br><b>准备工作：</b>腾讯云账号（cloud.tencent.com，需实名认证）。<br><b>① 创建环境：</b>打开「云开发 CloudBase」（tcb.cloud.tencent.com）→ 新建环境 → 填环境名称 → 创建。<br>· 资源勾选「<b>云数据库</b>」——<b>「云数据库」就是文档型数据库（MongoDB）</b>，控制台里就叫“云数据库”，不叫“文档型数据库”；<b>千万不要选 PostgreSQL / PG 模式</b>（选了就只有“新建表”、没有“新建集合”，工作台用不了）。<br>· 创建完成后在「环境概览」复制「环境ID（envId）」（形如 xxx-1a2b3c）。<br><b>② 开启匿名登录：</b>环境 → 「登录授权 / 身份验证」→ 登录方式 → 开启「<b>匿名登录</b>」。不开启会同步失败，工作台会提示“匿名登录未开启”。<br><b>③ 新建两个集合：</b>环境 → 数据库 → 「集合管理」→「+ 新建集合」，分别建：<br>· workbench_sync_meta（存版本号 / 校验信息）<br>· workbench_sync_chunk（存数据分块）<br>· 两个集合权限都设为「<b>所有用户可读写</b>」（多设备互通必须）。<br><b>④ 安全域名（必须，否则跨域被拦截）：</b>环境 →「环境配置 / 设置」→「安全来源 / 安全配置」→「安全域名」→「添加域名」→ 填工作台网址（就是你打开工作台时地址栏里的网址，如 https://你的域名，本地调试填 localhost 或 http://127.0.0.1）。不加会被浏览器 CORS 拦截，同步失败。<br><b>⑤ 在工作台绑定：</b>数据管理 → 云同步 → 同步方式选「<b>腾讯云 CloudBase</b>」→ 粘贴环境ID（正式版已内置会自动带出）→ 点「<b>保存并立即同步</b>」。<br><b>⑥ 多设备：</b>每台设备填同一个环境ID即可互通；同事版用户请填<b>他自己的</b>环境ID，数据互相隔离。') +
-    sec('六、常见问题', faqHtml) +
-    sec('七、安全提示', '· 定期导出备份；不要把正式版链接公开转发（含你的云配置）。<br>· 工作台里不要写极端敏感信息（如身份证号）；云同步数据为明文存储。');
+    sec('五、绑定 Supabase 同步（详细步骤）', '<b>适合：</b>想用 Supabase（PostgreSQL 云数据库）做云同步的用户。正式版已内置你的 Supabase 配置，新设备打开会自动带出；同事版请用<b>他自己的</b> Supabase 项目，数据互相隔离。<br><b>准备工作：</b>一个邮箱。<br><b>① 注册并创建项目：</b>打开 supabase.com → 注册（邮箱即可）→ Create a new project → 填项目名、设置数据库密码、选地区（建议选 Singapore / 东南亚，国内访问较快）→ 创建（免费额度 500MB 数据库，个人够用）。<br><b>② 建表并授权：</b>左侧 SQL Editor → New query → 粘贴以下 SQL → Run：<br><code>create table if not exists public.workbench_sync (sync_key text primary key, rev bigint not null default 0, updated_at timestamptz not null default now(), device_id text, checksum text, size bigint, enc text, payload text);</code><br><code>alter table public.workbench_sync enable row level security;</code><br><code>create policy "sync_select" on public.workbench_sync for select using (true);</code><br><code>create policy "sync_insert" on public.workbench_sync for insert with check (true);</code><br><code>create policy "sync_update" on public.workbench_sync for update using (true) with check (true);</code><br>· 个人用更简单：把上面 3 条策略换成一行 <code>alter table public.workbench_sync disable row level security;</code> 即可（关闭行级安全）。<br><b>③ 拿密钥：</b>左侧 Project Settings → API → 复制 <b>Project URL</b>（形如 https://xxxx.supabase.co）和 <b>anon public</b> 公钥。<br><b>④ 在工作台绑定：</b>数据管理 → 云同步 → 同步方式选「<b>Supabase</b>」→ 粘贴 Project URL 和 anon 公钥（正式版已内置会自动带出）→ 点「<b>保存并立即同步</b>」。<br><b>⑤ 多设备：</b>每台设备填相同的 Project URL + anon 公钥即可互通；同事版用户请填他自己的 Supabase 项目。') +
+    sec('六、绑定腾讯云 CloudBase 同步（详细步骤）', '<b>适合：</b>想把数据同步到腾讯云的用户（同事版用户用<b>自己的</b>腾讯云账号，数据与别人隔离）。<br><b>准备工作：</b>腾讯云账号（cloud.tencent.com，需实名认证）。<br><b>① 创建环境：</b>打开「云开发 CloudBase」（tcb.cloud.tencent.com）→ 新建环境 → 填环境名称 → 创建。<br>· 资源勾选「<b>云数据库</b>」——<b>「云数据库」就是文档型数据库（MongoDB）</b>，控制台里就叫“云数据库”，不叫“文档型数据库”；<b>千万不要选 PostgreSQL / PG 模式</b>（选了就只有“新建表”、没有“新建集合”，工作台用不了）。<br>· 创建完成后在「环境概览」复制「环境ID（envId）」（形如 xxx-1a2b3c）。<br><b>② 开启匿名登录：</b>环境 → 「登录授权 / 身份验证」→ 登录方式 → 开启「<b>匿名登录</b>」。不开启会同步失败，工作台会提示“匿名登录未开启”。<br><b>③ 新建两个集合：</b>环境 → 数据库 → 「集合管理」→「+ 新建集合」，分别建：<br>· workbench_sync_meta（存版本号 / 校验信息）<br>· workbench_sync_chunk（存数据分块）<br>· 两个集合权限都设为「<b>所有用户可读写</b>」（多设备互通必须）。<br><b>④ 安全域名（必须，否则跨域被拦截）：</b>环境 →「环境配置 / 设置」→「安全来源 / 安全配置」→「安全域名」→「添加域名」→ 填工作台网址（就是你打开工作台时地址栏里的网址，如 https://你的域名，本地调试填 localhost 或 http://127.0.0.1）。不加会被浏览器 CORS 拦截，同步失败。<br><b>⑤ 在工作台绑定：</b>数据管理 → 云同步 → 同步方式选「<b>腾讯云 CloudBase</b>」→ 粘贴环境ID（正式版已内置会自动带出）→ 点「<b>保存并立即同步</b>」。<br><b>⑥ 多设备：</b>每台设备填同一个环境ID即可互通；同事版用户请填<b>他自己的</b>环境ID，数据互相隔离。') +
+    sec('七、常见问题', faqHtml) +
+    sec('八、安全提示', '· 定期导出备份；不要把正式版链接公开转发（含你的云配置）。<br>· 工作台里不要写极端敏感信息（如身份证号）；云同步数据为明文存储。');
 }
 /* ================= 云同步（多设备实时同步） ================= */
 /* 驱动：LeanCloud 国际版（免备案、国内可直连）/ 腾讯云 CloudBase / 自建 WebDAV（需开启 CORS）
@@ -1567,7 +1569,7 @@ const SyncEngine = {
     const isCB = s.provider === 'cloudbase';
     const providerOpts = [
       ['', '不使用云同步（仅本地）'],
-      ['leancloud', 'LeanCloud 国际版（推荐，免备案）'],
+      ['leancloud', 'LeanCloud 国际版（免备案）'],
       ['supabase', 'Supabase（PostgreSQL，免费额度大）'],
       ['cloudbase', '腾讯云 CloudBase（云开发，国内速度快）'],
       ['webdav', '自建 WebDAV（需开启 CORS）']
@@ -1613,7 +1615,7 @@ const SyncEngine = {
       '</div>' +
       '<div style="margin-top:12px;font-size:12px;color:var(--text3);line-height:1.9">' +
       '<b>冲突规则：</b>多台设备同时编辑时以“最后保存的版本”为准；覆盖前会自动在浏览器里备份一份（banzhuren_sync_backup_*），不会丢数据。<br>' +
-      (isLC ? '<b>LeanCloud 配置步骤：</b>① 打开 leancloud.app 注册国际版（免备案、国内可直连）→ 创建应用；② 进入 设置 → 应用凭证，复制 AppID 和 AppKey；③ 粘贴后点“保存并立即同步”，首次同步会自动创建两个数据表（WorkbenchSyncMeta / WorkbenchSyncChunk）。' : '') +
+      (isLC ? '<b>LeanCloud 配置步骤：</b>① 打开 leancloud.app 注册国际版（免备案、国内可直连）→ 创建应用；② 进入 设置 → 应用凭证，复制 AppID 和 AppKey；③ 粘贴后点“保存并立即同步”，首次同步会自动创建两个数据表（WorkbenchSyncMeta / WorkbenchSyncChunk）。<br><b>注意：</b>国际版近期可能暂停新用户注册；若无法注册，请改用 Supabase 或腾讯云 CloudBase。' : '') +
       (isSB ? '<b>Supabase 配置步骤：</b>① 注册 supabase.com 并创建项目；② 打开 SQL Editor，执行建表 + 授权 SQL（完整代码见 README-云同步与部署.md）；③ 项目设置 → API，复制 Project URL 和 anon public 粘贴到上方；④ 点“保存并立即同步”。' : '') +
       (isCB ? '<b>腾讯云 CloudBase 配置步骤：</b>① 打开 cloud.tencent.com 的「云开发 CloudBase」创建环境，复制「环境ID（envId）」；② 环境 → 身份验证 → 登录方式，开启「匿名登录」；③ 环境 → 安全配置，把工作台网址加入「安全域名」（本地调试填 localhost）；④ 数据库创建两个集合并把权限设为「所有用户可读写」：workbench_sync_meta、workbench_sync_chunk；⑤ 粘贴环境ID后点“保存并立即同步”。' : '') +
       (isWD ? '<b>WebDAV 要求：</b>服务器（如 Cloudreve、Nextcloud）必须开启跨域 CORS，并支持 PUT/GET/DELETE；填入文件完整地址即可。' : '') +
