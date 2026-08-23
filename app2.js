@@ -1129,7 +1129,7 @@ window.DEFAULT_SYNC = Object.assign({
   provider: 'supabase',
   supUrl: 'https://nkfspiaeelwnedsqjveq.supabase.co',  // Supabase Project URL（内置，自动恢复）
   supKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5rZnNwaWFlZWx3bmVkc3FqdmVxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY2OTQ4MzQsImV4cCI6MjEwMjI3MDgzNH0.LoE2sWBZFlQn2iLxXbJC6AKkpleSjpTAgDXtkmyl3yQ',  // anon public（公钥）
-  cbEnv: 'mywork-d1gmezh3n29b75b0b',  // 腾讯云 CloudBase 环境ID（内置，自动恢复）
+  cbEnv: 'myworkspace-d3gcmop2c0fd4aa8e',  // 腾讯云 CloudBase 环境ID（内置，自动恢复）
   syncKey: 'main'   // 必须与你在工作台“同步空间标识”里填的一致
 }, window.DEFAULT_SYNC || {});
 
