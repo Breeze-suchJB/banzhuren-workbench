@@ -2220,6 +2220,8 @@ const ACTIONS = {
       DB.save(); closeModal(); render(); toast('班费记录已删除');
     }});
   },
+  exportFunds: function () { exportFundsOpen(); },
+  exportFundsRange: function () { exportFundsRange(); },
   addVio: function () { vioFormModal(); },
   editVio: function (el) { const v = DB.data.violations.find(x => x.id === el.dataset.id); if (v) vioFormModal(v); },
   saveVio: function (el) { saveVio(el.dataset.id); },

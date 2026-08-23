@@ -1,5 +1,5 @@
 /* 构建版本 */
-const APP_VERSION = '20260820-021214';
+const APP_VERSION = '20260823-173127';
 /* ================= 数据层 ================= */
 const STORAGE_KEY = 'banzhuren_workbench_v1';
 const NO_DEMO_KEY = 'banzhuren_no_demo';
@@ -2752,7 +2752,7 @@ function affFundHtml() {
     '<div class="stat-card"><div class="card-title">💰 总收入</div><div class="stat-num" style="color:var(--ok)">¥' + income.toFixed(2) + '</div></div>' +
     '<div class="stat-card"><div class="card-title">💸 总支出</div><div class="stat-num" style="color:var(--danger)">¥' + expense.toFixed(2) + '</div></div>' +
     '<div class="stat-card"><div class="card-title">🏦 结余</div><div class="stat-num" style="color:' + (balance >= 0 ? 'var(--text)' : 'var(--danger)') + '">¥' + balance.toFixed(2) + '</div></div></div>' +
-    '<div class="card"><div class="card-title">🧾 班费收支明细</div><div class="btn-row" style="margin-bottom:10px"><button class="btn primary small" data-action="addFund">＋ 记一笔</button></div>' +
+    '<div class="card"><div class="card-title">🧾 班费收支明细</div><div class="btn-row" style="margin-bottom:10px"><button class="btn primary small" data-action="addFund">＋ 记一笔</button><button class="btn outline small" data-action="exportFunds">📤 导出 CSV</button></div>' +
     '<div class="table-wrap" style="max-height:480px;overflow:auto"><table class="tbl"><thead><tr><th>日期</th><th>类型</th><th>分类</th><th>金额</th><th>说明</th><th>操作</th></tr></thead><tbody>' +
     (rows || '<tr><td colspan="6">' + emptyHtml('暂无班费记录') + '</td></tr>') + '</tbody></table></div></div>';
 }
@@ -2779,6 +2779,38 @@ function saveFund() {
   d.funds.push({ id: uid('fd'), date: v.date || todayStr(), type: v.type === '支出' ? '支出' : '收入', amount: amt, category: v.category || '', note: v.note || '' });
   DB.save(); closeModal(); render();
   toast('班费已记录');
+}
+function exportFundsOpen() {
+  openModal(
+    '<div class="form-grid">' +
+    field('rStart', '开始日期（选填）', '', 'date') +
+    field('rEnd', '结束日期（选填）', '', 'date') +
+    '<div style="font-size:12.5px;color:var(--text3)">选择时间段后，只导出该时间段内的班费收支；留空则导出全部记录。</div>' +
+    '</div>',
+    { title: '导出班费 CSV' }
+  );
+  const foot = modalFootHtml('<button class="btn primary" data-action="exportFundsRange">导出 CSV</button>');
+  document.getElementById('modalBox').insertAdjacentHTML('beforeend', foot);
+}
+function exportFundsRange() {
+  const v = readFields();
+  exportFundsCsv(v.rStart || '', v.rEnd || '');
+}
+function exportFundsCsv(rStart, rEnd) {
+  const d = DB.data;
+  const S = rStart && rEnd ? (rStart <= rEnd ? rStart : rEnd) : '';
+  const E = rStart && rEnd ? (rStart <= rEnd ? rEnd : rStart) : '';
+  const inR = function (dt) { return !!dt && (!S || (dt >= S && dt <= E)); };
+  const head = ['日期', '类型', '分类', '金额', '说明'];
+  if (S) head.push('时间段');
+  const rows = [head];
+  (d.funds || []).slice().sort((a, b) => a.date < b.date ? -1 : 1).forEach(f => {
+    if (S && !inR(f.date)) return;
+    const row = [f.date, f.type, f.category || '', f.amount, f.note || ''];
+    if (S) row.push(S + ' ~ ' + E);
+    rows.push(row);
+  });
+  downloadFile('班费收支.csv', '﻿' + toCSV(rows), 'text/csv;charset=utf-8');
 }
 function affVioHtml() {
   const d = DB.data;
